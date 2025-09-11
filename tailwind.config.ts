@@ -22,6 +22,7 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          glow: "hsl(var(--primary-glow))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -38,6 +39,19 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
+          glow: "hsl(var(--accent-glow))",
+        },
+        // Audio visualization colors
+        wave: {
+          active: "hsl(var(--wave-active))",
+          response: "hsl(var(--wave-response))",
+          background: "hsl(var(--wave-background))",
+        },
+        // Flow state colors
+        flow: {
+          calm: "hsl(var(--flow-calm))",
+          active: "hsl(var(--flow-active))",
+          responsive: "hsl(var(--flow-responsive))",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",

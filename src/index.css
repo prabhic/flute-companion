@@ -2,41 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Musical Flow Design System - Colors inspired by sound waves and musical serenity */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Base colors - Deep musical blues */
+    --background: 220 25% 8%;
+    --foreground: 200 15% 95%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* Card surfaces with subtle depth */
+    --card: 220 20% 12%;
+    --card-foreground: 200 15% 95%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 20% 12%;
+    --popover-foreground: 200 15% 95%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Musical primary - Deep resonant blue */
+    --primary: 210 80% 55%;
+    --primary-foreground: 220 25% 8%;
+    --primary-glow: 210 85% 70%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Harmonic secondary - Soft teal */
+    --secondary: 180 40% 25%;
+    --secondary-foreground: 180 15% 90%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted tones for subtle elements */
+    --muted: 220 15% 20%;
+    --muted-foreground: 200 10% 70%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent - Flowing cyan for active states */
+    --accent: 190 70% 45%;
+    --accent-foreground: 220 25% 8%;
+    --accent-glow: 190 80% 60%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Audio visualization colors */
+    --wave-active: 210 80% 55%;
+    --wave-response: 280 60% 65%;
+    --wave-background: 220 20% 15%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Flow state indicators */
+    --flow-calm: 180 40% 45%;
+    --flow-active: 210 70% 50%;
+    --flow-responsive: 280 60% 55%;
 
-    --radius: 0.5rem;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 200 15% 95%;
+
+    --border: 220 15% 25%;
+    --input: 220 15% 20%;
+    --ring: 210 80% 55%;
+
+    --radius: 1rem;
+
+    /* Musical gradients */
+    --gradient-flow: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    --gradient-wave: linear-gradient(90deg, hsl(var(--wave-active)), hsl(var(--wave-response)));
+    --gradient-background: linear-gradient(180deg, hsl(var(--background)), hsl(220 20% 10%));
+    
+    /* Animations and transitions */
+    --transition-flow: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-quick: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Audio-reactive shadows */
+    --shadow-audio: 0 0 30px hsl(var(--primary) / 0.3);
+    --shadow-flow: 0 10px 40px -10px hsl(var(--accent) / 0.4);
+    --shadow-response: 0 0 50px hsl(var(--wave-response) / 0.4);
 
     --sidebar-background: 0 0% 98%;
 
@@ -56,33 +86,37 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Dark mode keeps the same musical theme but with inverted contrast */
+    --background: 220 25% 8%;
+    --foreground: 200 15% 95%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 220 20% 12%;
+    --card-foreground: 200 15% 95%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 20% 12%;
+    --popover-foreground: 200 15% 95%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 210 80% 55%;
+    --primary-foreground: 220 25% 8%;
+    --primary-glow: 210 85% 70%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 180 40% 25%;
+    --secondary-foreground: 180 15% 90%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 220 15% 20%;
+    --muted-foreground: 200 10% 70%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 190 70% 45%;
+    --accent-foreground: 220 25% 8%;
+    --accent-glow: 190 80% 60%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 200 15% 95%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 220 15% 25%;
+    --input: 220 15% 20%;
+    --ring: 210 80% 55%;
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -101,5 +135,71 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    background: var(--gradient-background);
+    overflow-x: hidden;
+  }
+}
+
+@layer utilities {
+  /* Audio visualization utilities */
+  .audio-wave {
+    background: var(--gradient-wave);
+    transition: var(--transition-quick);
+    animation: pulse-audio 2s ease-in-out infinite;
+  }
+
+  .flow-shadow {
+    box-shadow: var(--shadow-flow);
+  }
+
+  .audio-shadow {
+    box-shadow: var(--shadow-audio);
+  }
+
+  .response-shadow {
+    box-shadow: var(--shadow-response);
+  }
+
+  .gradient-flow {
+    background: var(--gradient-flow);
+  }
+
+  .transition-flow {
+    transition: var(--transition-flow);
+  }
+
+  .transition-quick {
+    transition: var(--transition-quick);
+  }
+
+  /* Audio-reactive animations */
+  @keyframes pulse-audio {
+    0%, 100% { opacity: 0.6; transform: scaleY(0.8); }
+    50% { opacity: 1; transform: scaleY(1.2); }
+  }
+
+  @keyframes flow-wave {
+    0% { transform: translateX(-100%) scaleY(1); }
+    50% { transform: translateX(0%) scaleY(1.5); }
+    100% { transform: translateX(100%) scaleY(1); }
+  }
+
+  @keyframes gentle-pulse {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1; }
+  }
+
+  .animate-flow-wave {
+    animation: flow-wave 3s ease-in-out infinite;
+  }
+
+  .animate-gentle-pulse {
+    animation: gentle-pulse 4s ease-in-out infinite;
+  }
+
+  /* Blur effects for depth */
+  .backdrop-glass {
+    backdrop-filter: blur(12px) saturate(150%);
+    background: hsl(var(--card) / 0.7);
   }
 }
