@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 interface AudioVisualizerProps {
   isListening: boolean;
@@ -13,7 +13,6 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
-  const [waveData, setWaveData] = useState<number[]>(Array(50).fill(0));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -22,60 +21,66 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const resize = () => {
+      const ratio = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = Math.max(1, w * ratio);
+      canvas.height = Math.max(1, h * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    };
+
+    resize();
+    window.addEventListener('resize', resize);
+
     const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      ctx.clearRect(0, 0, w, h);
 
-      // Create flowing wave visualization
-      const centerY = canvas.height / 2;
-      const amplitude = isListening ? audioLevel * 100 : 10;
-      const responseAmplitude = isResponding ? 60 : 0;
+      const centerY = h / 2;
+      const amplitude = isListening ? Math.max(8, audioLevel * 90) : 6;
+      const responseAmplitude = isResponding ? 50 : 0;
 
-      // Draw user's audio wave (blue)
+      // User wave (primary)
       if (isListening) {
         ctx.beginPath();
         ctx.strokeStyle = 'hsl(210, 80%, 55%)';
         ctx.lineWidth = 3;
-        ctx.globalAlpha = 0.8;
-
-        for (let i = 0; i < canvas.width; i++) {
-          const x = i;
-          const wave1 = Math.sin((i + Date.now() * 0.003) * 0.02) * amplitude;
-          const wave2 = Math.sin((i + Date.now() * 0.005) * 0.03) * amplitude * 0.5;
+        ctx.globalAlpha = 0.85;
+        for (let x = 0; x < w; x++) {
+          const wave1 = Math.sin((x + Date.now() * 0.003) * 0.03) * amplitude;
+          const wave2 = Math.sin((x + Date.now() * 0.006) * 0.02) * amplitude * 0.4;
           const y = centerY + wave1 + wave2;
-
-          if (i === 0) ctx.moveTo(x, y);
+          if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
         ctx.stroke();
       }
 
-      // Draw AI response wave (purple)
+      // AI response wave (secondary)
       if (isResponding) {
         ctx.beginPath();
         ctx.strokeStyle = 'hsl(280, 60%, 65%)';
         ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.6;
-
-        for (let i = 0; i < canvas.width; i++) {
-          const x = i;
-          const wave = Math.sin((i + Date.now() * 0.008) * 0.025) * responseAmplitude;
-          const y = centerY + wave + 40;
-
-          if (i === 0) ctx.moveTo(x, y);
+        ctx.globalAlpha = 0.7;
+        for (let x = 0; x < w; x++) {
+          const wave = Math.sin((x + Date.now() * 0.008) * 0.025) * responseAmplitude;
+          const y = centerY + wave + 36;
+          if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
         ctx.stroke();
       }
 
-      // Draw background flow lines
-      ctx.globalAlpha = 0.2;
+      // Background flow lines
+      ctx.globalAlpha = 0.18;
       ctx.strokeStyle = 'hsl(190, 70%, 45%)';
       ctx.lineWidth = 1;
-
       for (let i = 0; i < 3; i++) {
         ctx.beginPath();
-        for (let x = 0; x < canvas.width; x++) {
-          const y = centerY + Math.sin((x + Date.now() * 0.001 + i * 100) * 0.01) * 20;
+        for (let x = 0; x < w; x++) {
+          const y = centerY + Math.sin((x + Date.now() * 0.001 + i * 120) * 0.01) * 18;
           if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
@@ -88,21 +93,15 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     animate();
 
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      window.removeEventListener('resize', resize);
     };
   }, [isListening, audioLevel, isResponding]);
 
   return (
     <div className="relative w-full h-40 backdrop-glass rounded-2xl overflow-hidden border border-border/50">
-      <canvas
-        ref={canvasRef}
-        width={800}
-        height={160}
-        className="w-full h-full"
-      />
-      
+      <canvas ref={canvasRef} className="w-full h-full" />
+
       {/* Overlay indicators */}
       <div className="absolute top-4 left-4 flex gap-3">
         {isListening && (
@@ -121,13 +120,15 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
 
       {/* Flow state indicator */}
       <div className="absolute bottom-4 right-4">
-        <div className={`px-3 py-1 rounded-full text-xs transition-flow ${
-          isListening && isResponding 
-            ? 'bg-flow-responsive/20 text-flow-responsive border border-flow-responsive/30' 
-            : isListening 
-            ? 'bg-flow-active/20 text-flow-active border border-flow-active/30'
-            : 'bg-flow-calm/20 text-flow-calm border border-flow-calm/30'
-        }`}>
+        <div
+          className={`px-3 py-1 rounded-full text-xs transition-flow ${
+            isListening && isResponding
+              ? 'bg-flow-responsive/20 text-flow-responsive border border-flow-responsive/30'
+              : isListening
+              ? 'bg-flow-active/20 text-flow-active border border-flow-active/30'
+              : 'bg-flow-calm/20 text-flow-calm border border-flow-calm/30'
+          }`}
+        >
           {isListening && isResponding ? 'In Flow' : isListening ? 'Active' : 'Ready'}
         </div>
       </div>
