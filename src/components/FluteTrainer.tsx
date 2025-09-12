@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { AudioVisualizer } from './AudioVisualizer';
-import { Mic, MicOff, Play, Volume2, AlertTriangle } from 'lucide-react';
+import { PitchIndicator } from './PitchIndicator';
+import { MusicalAdvice } from './MusicalAdvice';
+import { useMusicalAnalysis } from '@/hooks/useMusicalAnalysis';
+import { musicAI } from '@/services/musicAI';
+import { Mic, MicOff, Play, Volume2, AlertTriangle, Settings, Key } from 'lucide-react';
 
 export const FluteTrainer: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
@@ -10,6 +15,10 @@ export const FluteTrainer: React.FC = () => {
   const [isResponding, setIsResponding] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  
+  const { feedback, analyzeLiveAudio, startPhrase, endPhrase, clearAnalysis } = useMusicalAnalysis();
 
   // Audio engine refs
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -45,13 +54,19 @@ export const FluteTrainer: React.FC = () => {
     // Scale a bit for UI
     setAudioLevel(Math.min(1, rms * 3));
 
-    // Simple phrase gate
+    // Perform live pitch analysis
+    analyzeLiveAudio(analyser);
+
+    // Simple phrase gate with enhanced detection
     const now = performance.now();
     const onThresh = 0.06; // start phrase
     const offThresh = 0.03; // likely silence
 
     if (rms > onThresh) {
-      setIsPlayingPhrase(true);
+      if (!isPlayingPhrase) {
+        setIsPlayingPhrase(true);
+        startPhrase();
+      }
       silenceStartRef.current = null;
     } else {
       if (isPlayingPhrase) {
@@ -140,49 +155,56 @@ export const FluteTrainer: React.FC = () => {
 
     setIsPlayingPhrase(false);
     silenceStartRef.current = null;
-  }, []);
+    clearAnalysis();
+  }, [clearAnalysis]);
 
-  // AI musical response (simple melodic phrase via WebAudio for this version)
+  // Enhanced AI musical response with analysis
   const handleAudioResponse = useCallback(async () => {
     setIsResponding(true);
+    
+    // Get AI analysis of the phrase
+    const analysis = await endPhrase();
+    
     const ctx = audioCtxRef.current;
-
-    if (ctx) {
+    if (ctx && analysis) {
       // Ensure context is running
       if (ctx.state === 'suspended') {
         try { await ctx.resume(); } catch {}
       }
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      gain.gain.value = 0.0001;
-      osc.connect(gain).connect(ctx.destination);
 
-      const scale = [523.25, 587.33, 659.25, 698.46, 783.99]; // C5 pentatonic-ish
-      const startT = ctx.currentTime + 0.05;
-      let t = startT;
-      const step = 0.35;
+      // Play AI-generated response using the analysis
+      const notes = analysis.notes;
+      if (notes.length > 0) {
+        const startT = ctx.currentTime + 0.1;
+        let t = startT;
 
-      for (let i = 0; i < 5; i++) {
-        const f = scale[(Math.floor(Math.random() * scale.length))];
-        osc.frequency.setValueAtTime(f, t);
-        gain.gain.setValueAtTime(0.0001, t);
-        gain.gain.linearRampToValueAtTime(0.08, t + 0.05);
-        gain.gain.linearRampToValueAtTime(0.0001, t + step - 0.05);
-        t += step;
+        for (const note of notes) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(note.frequency, t);
+          
+          gain.gain.setValueAtTime(0.0001, t);
+          gain.gain.linearRampToValueAtTime(0.1, t + 0.05);
+          gain.gain.linearRampToValueAtTime(0.0001, t + note.duration - 0.05);
+          
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + note.duration);
+          
+          t += note.duration;
+        }
+
+        await new Promise((r) => setTimeout(r, (t - startT + 0.2) * 1000));
       }
-
-      osc.start(startT);
-      osc.stop(t + 0.05);
-
-      await new Promise((r) => setTimeout(r, (t - startT + 0.1) * 1000));
     } else {
-      // Fallback: just wait to simulate response
+      // Fallback for simple response
       await new Promise((r) => setTimeout(r, 1800));
     }
 
     setIsResponding(false);
-  }, []);
+  }, [endPhrase]);
 
   const toggleListening = useCallback(async () => {
     if (!isListening) {
@@ -209,6 +231,11 @@ export const FluteTrainer: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleApiKeyChange = (key: string) => {
+    setApiKey(key);
+    musicAI.setApiKey(key);
+  };
+
   return (
     <div className="min-h-screen p-6">
       <div className="max-w-4xl mx-auto space-y-8">
@@ -221,6 +248,29 @@ export const FluteTrainer: React.FC = () => {
             Your AI musical companion - Play, pause, and hear me flow back
           </p>
         </div>
+
+        {/* Settings Panel */}
+        {showSettings && (
+          <Card className="backdrop-glass border-border/50 p-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-primary">OpenAI API Key (Optional)</h3>
+              </div>
+              <div className="space-y-2">
+                <Input
+                  type="password"
+                  placeholder="sk-..."
+                  value={apiKey}
+                  onChange={(e) => handleApiKeyChange(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Add your OpenAI API key for enhanced AI musical responses. Without it, you'll get simple intelligent responses.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Main Control Panel */}
         <Card className="backdrop-glass border-border/50 p-8">
@@ -282,6 +332,15 @@ export const FluteTrainer: React.FC = () => {
                 )}
               </Button>
 
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => setShowSettings(!showSettings)}
+                className="px-4"
+              >
+                <Settings className="w-5 h-5" />
+              </Button>
+
               {isResponding && (
                 <Button variant="pulse" size="lg" disabled>
                   <Play className="w-5 h-5 animate-pulse" />
@@ -297,6 +356,18 @@ export const FluteTrainer: React.FC = () => {
             </div>
           </div>
         </Card>
+
+        {/* Musical Feedback */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <PitchIndicator 
+            pitch={feedback.currentPitch} 
+            accuracy={feedback.pitchAccuracy} 
+          />
+          <MusicalAdvice 
+            analysis={feedback.phraseAnalysis} 
+            isAnalyzing={feedback.isAnalyzing} 
+          />
+        </div>
 
         {/* Practice Tips */}
         <div className="grid md:grid-cols-3 gap-4">
