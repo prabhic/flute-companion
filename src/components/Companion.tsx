@@ -142,10 +142,10 @@ export function Companion() {
           size="icon"
           variant="ghost"
           onClick={c.toggleDrone}
-          aria-pressed={c.settings.drone}
-          aria-label={c.settings.drone ? 'Stop tanpura drone' : 'Play tanpura drone'}
+          aria-pressed={c.droneOn}
+          aria-label={c.droneOn ? 'Stop tanpura drone' : 'Play tanpura drone'}
           title="Tanpura drone (headphones recommended)"
-          className={cn('rounded-full h-12 w-12', c.settings.drone && 'text-moon bg-moon/10')}
+          className={cn('rounded-full h-12 w-12', c.droneOn && 'text-moon bg-moon/10')}
         >
           <Waves className="w-5 h-5" />
         </Button>

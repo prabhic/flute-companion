@@ -41,10 +41,10 @@ const jitter = (amt: number) => (Math.random() * 2 - 1) * amt;
 
 /**
  * One continuous breathy voice for the whole phrase (flute-sound-synthesis skill).
- * Returns the time the phrase (incl. release) ends, in ctx time.
+ * Returns when the phrase (incl. release) ends, in ctx time, and a stop() that fades it out now.
  */
 export function playPhrase(ctx: AudioContext, out: AudioNode, notes: Note[], saHz: number, at = ctx.currentTime + 0.12) {
-  if (!notes.length) return at;
+  if (!notes.length) return { end: at, stop: () => {} };
   // env (articulation, strength, swell/fade) → trem (breath tremolo) → out
   const env = ctx.createGain();
   env.gain.value = 0;
@@ -154,7 +154,14 @@ export function playPhrase(ctx: AudioContext, out: AudioNode, notes: Note[], saH
     node.stop(end);
   });
   oscs[0].o.onended = () => trem.disconnect();
-  return end;
+  return { end, stop: () => fadeOut(ctx, trem) };
+}
+
+/** Fade a node out over ~50ms, then disconnect it — used when the player chooses Rest mid-reply. */
+export function fadeOut(ctx: AudioContext, node: GainNode) {
+  node.gain.cancelScheduledValues(ctx.currentTime);
+  node.gain.setTargetAtTime(0, ctx.currentTime, 0.015);
+  window.setTimeout(() => node.disconnect(), 150);
 }
 
 /** Tanpura drone: Pa · Sa · Sa · kharaj Sa, looped with a look-ahead scheduler. Returns stop(). */

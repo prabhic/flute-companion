@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Carnatic raga model research repo (42 MB, has its own git history; not used by the app)
+raga-models/
