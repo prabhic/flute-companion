@@ -74,7 +74,8 @@ export function Companion() {
   const c = useCompanion();
   const running = c.phase !== 'idle';
   const replying = c.phase === 'responding';
-  const semi = replying ? (c.replyIdx !== null ? c.reply[c.replyIdx]?.semi : null) : c.liveSemi;
+  // While tuning, the old Sa is untrusted — don't name swaras against it.
+  const semi = c.phase === 'tuning' ? null : replying ? (c.replyIdx !== null ? c.reply[c.replyIdx]?.semi : null) : c.liveSemi;
   const label = semi === null || semi === undefined ? null : swara(semi);
   const key = nearestKey(c.settings.saHz);
 
@@ -101,6 +102,14 @@ export function Companion() {
           )}
           style={{ transform: `scale(${1 + (replying ? 0.12 : c.level * 0.3)})` }}
         >
+          {c.phase === 'tuning' && (
+            <svg aria-hidden viewBox="0 0 100 100" className="absolute -inset-5 w-[calc(100%+2.5rem)] h-[calc(100%+2.5rem)] -rotate-90">
+              <circle
+                cx="50" cy="50" r="48" fill="none" stroke="hsl(var(--saffron))" strokeWidth="1" strokeLinecap="round"
+                pathLength={1} strokeDasharray={`${c.tuneProgress} 1`} className="transition-all duration-150"
+              />
+            </svg>
+          )}
           <div className="text-center select-none">
             {label ? (
               <>
@@ -184,7 +193,13 @@ export function Companion() {
                   Tune my Sa
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  {c.phase === 'listening' ? 'Tap, then play and hold your Sa.' : running ? 'Ready when it is your turn.' : 'Begin first, then tune by playing your Sa.'}
+                  {c.phase === 'listening'
+                    ? 'Tap, then play and hold your Sa.'
+                    : running
+                      ? 'Ready when it is your turn.'
+                      : c.settings.tuned
+                        ? 'Your Sa is tuned. Retune any time after Begin.'
+                        : 'When you Begin, I will ask for your Sa first.'}
                 </p>
               </div>
 

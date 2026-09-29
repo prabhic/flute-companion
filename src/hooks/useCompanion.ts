@@ -10,16 +10,17 @@ export type Phase = 'idle' | 'listening' | 'playing' | 'responding' | 'tuning';
 
 interface Settings {
   saHz: number;
+  tuned: boolean; // Sa was measured from the player's own flute (octave included)
   ragaId: string; // 'follow' = let the raga emerge from the player
 }
 
-const DEFAULTS: Settings = { saHz: BANSURI_KEYS.find((k) => k.key === 'E')!.saHz, ragaId: 'follow' };
+const DEFAULTS: Settings = { saHz: BANSURI_KEYS.find((k) => k.key === 'E')!.saHz, tuned: false, ragaId: 'follow' };
 const STORE = 'echo-flute-flow:settings';
 
 const loadSettings = (): Settings => {
   try {
-    const { saHz, ragaId } = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORE) ?? '{}') };
-    return { saHz, ragaId };
+    const { saHz, tuned, ragaId } = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORE) ?? '{}') };
+    return { saHz, tuned, ragaId };
   } catch {
     return DEFAULTS;
   }
@@ -32,6 +33,7 @@ const TUNE_TIME = 1.5; // s of held Sa for calibration
 // Lowest pitch a bansuri plays is mandra Pa (-500¢); every tanpura string sits at or below
 // -1200¢. Anything under this is the drone (or a hum), never the flute.
 const FLUTE_LOW = -700;
+const TUNE_STEADY = 40; // ¢ a held Sa may wander before the hold starts over
 
 export function useCompanion() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
@@ -44,6 +46,7 @@ export function useCompanion() {
   const [whisper, setWhisper] = useState('');
   const [emerged, setEmerged] = useState<Raga | null>(null);
   const [droneOn, setDroneOn] = useState(false);
+  const [tuneProgress, setTuneProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // Everything the rAF loop touches lives in refs — React state inside a rAF closure goes stale.
@@ -74,6 +77,7 @@ export function useCompanion() {
     tick: 0,
     hopSec: 1024 / 48000,
     recent: [] as (number | null)[], // last few frames' cents, for a steady live display
+    awaitQuiet: false, // after tuning, the held Sa must end before a phrase can begin
     settings,
   });
   s.current.settings = settings;
@@ -157,6 +161,10 @@ export function useCompanion() {
     const off = on * 0.6;
 
     if (now < st.muteUntil) return; // the companion must not hear itself
+    if (st.awaitQuiet) {
+      if (lvl > off) return;
+      st.awaitQuiet = false;
+    }
 
     const inPhrase = st.phase === 'playing' || st.phase === 'tuning';
     const p = lvl > off ? yin(buf, ctx.sampleRate) : null;
@@ -178,12 +186,23 @@ export function useCompanion() {
     }
 
     if (st.phase === 'tuning') {
-      if (loud) st.tuneHz.push(p!.hz);
-      if (st.tuneHz.length * st.hopSec >= TUNE_TIME) {
-        const sorted = [...st.tuneHz].sort((a, b) => a - b);
-        const saHz = sorted[sorted.length >> 1];
-        setSettings((prev) => ({ ...prev, saHz }));
-        setWhisper('Got it — that is your Sa now. Play whenever you like.');
+      // Tune on the raw pitch: the old Sa may be wrong by an octave, so no flute-range filter here.
+      if (!(p && p.clarity > 0.6 && lvl > on)) return;
+      const median = () => [...st.tuneHz].sort((a, b) => a - b)[st.tuneHz.length >> 1];
+      if (st.tuneHz.length > 4 && Math.abs(1200 * Math.log2(p.hz / median())) > TUNE_STEADY) {
+        st.tuneHz = []; // it moved — a Sa has to be held, so start the hold again
+        setWhisper('Hold it steady — one long, easy Sa…');
+      }
+      st.tuneHz.push(p.hz);
+      const progress = Math.min(1, (st.tuneHz.length * st.hopSec) / TUNE_TIME);
+      setTuneProgress(progress);
+      if (progress >= 1) {
+        setSettings((prev) => ({ ...prev, saHz: median(), tuned: true }));
+        setWhisper("That's your Sa — everything I play will sit on it. Now play anything.");
+        setTuneProgress(0);
+        st.awaitQuiet = true; // the Sa is still sounding — it is not a phrase
+        st.recent = [];
+        setLiveSemi(null); // it was named against the old Sa
         go('listening');
       }
       return;
@@ -241,9 +260,16 @@ export function useCompanion() {
         stream, source, capture, hopSec: 1024 / ctx.sampleRate,
         heardAt: ctx.currentTime, exchange: 0, phrases: 0, peakDb: -Infinity, hist: Array(12).fill(0),
       });
-      setWhisper("I'm listening. Play a phrase, then let it rest.");
-      go('listening');
       keepAwake();
+      if (st.settings.tuned) {
+        setWhisper("I'm listening. Play a phrase, then let it rest.");
+        go('listening');
+      } else {
+        // First time with this flute: the opening exchange is Sa itself.
+        st.tuneHz = [];
+        setWhisper('Before we play — give me your Sa. Play it and hold it, long and easy.');
+        go('tuning');
+      }
     } catch (err) {
       const name = (err as DOMException)?.name;
       setError(
@@ -275,6 +301,7 @@ export function useCompanion() {
 
   const tuneSa = useCallback(() => {
     s.current.tuneHz = [];
+    setTuneProgress(0);
     setWhisper('Play your Sa and hold it steady…');
     go('tuning');
   }, []);
@@ -344,6 +371,11 @@ export function useCompanion() {
     phase, level, liveSemi, played, reply, replyIdx, whisper, error, settings, droneOn,
     raga: ragaById(settings.ragaId) ?? emerged,
     begin, rest, tuneSa, toggleDrone, chooseRaga,
-    setSa: (saHz: number) => setSettings((p) => ({ ...p, saHz })),
+    tuneProgress,
+    // A new key is only a guess at Sa (and its octave) — ask to hear it again.
+    setSa: (saHz: number) => {
+      setSettings((p) => ({ ...p, saHz, tuned: false }));
+      if (s.current.phase === 'listening') tuneSa();
+    },
   };
 }
