@@ -41,6 +41,14 @@ reward a glance, never demand one.
   underline.
 - The orb already breathes with live loudness. Nothing numeric is ever shown.
 
+## First run and hidden tools
+
+- The first session (or a new bansuri key) opens with "give me your Sa". A saffron ring
+  fills as the hold steadies, and no swaras are named until Sa is known.
+- `?heard` or the **H** key opens "What I heard": the numeric analysis plus "Save as
+  fixture". It's a developer and tuning tool, and never part of normal practice.
+- Memory is disclosed plainly in settings, with "Forget our history".
+
 ## Permission and failure
 
 - Ask for the mic only on "Begin" (a user gesture). On denial, show one sentence on how to
@@ -68,3 +76,14 @@ or "Force response".
 - Contrast ≥ 4.5:1 for all text on the ink background.
 
 Code: `src/components/Companion.tsx`, `src/index.css`.
+
+## Validation status (update whenever real evidence arrives)
+
+A skill is a hypothesis until it's checked against real playing or a real expert.
+Record what it has been checked against, so no one mistakes a guess for a fact.
+
+| Claim | Checked against | Status |
+|---|---|---|
+| Desktop and 375px layouts | Screenshots | Checked |
+| Calm, un-gamified feel | Not tested with a player | Unvalidated |
+| iOS/Safari mic + worklet | — | **Untested** |

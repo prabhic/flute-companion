@@ -27,6 +27,7 @@ you play → silence (≈0.7s) → companion listens back (segment, infer raga)
 | answer | Starts on your last note, moves the opposite way, lands on Sa | Grows from exchange 3 |
 | ornament | Echo with meend into long notes and kan from the upper neighbour | Exchange ≥ 4 |
 | pakad | The raga's signature phrase, offered as a gift | Raga known and exchange ≥ 6, rare |
+| lead | A short raga phrase (piece of the pakad, or rise and return) for **you** to echo | Raga known and exchange ≥ 5. Guru → shishya. |
 | breath | Your breath rhythm (pulses, accents, strength) played on a neighbouring swara | When you pulsed or accented a note, from exchange 2. It answers in your own breath language. |
 
 **Expression is mirrored in every move.** Echo keeps each note's `dyn`, `pulse`, `accent`,
@@ -36,6 +37,22 @@ note: that teaches strength-shaping by example.
 
 Weights shift with the exchange count, so the partner earns the right to lead.
 If you used a meend yourself, the companion mirrors it in its echo. Being heard is the reward.
+
+## When the companion leads
+
+- After a lead, the next phrase you play is judged as an imitation: a pitch-class LCS of at
+  least 80% of the offered phrase means "caught" (octave slips are forgiven).
+- On a miss, it replays the *same* phrase and names the first note that slipped ("listen
+  for the Ga"). After two tries it lets go ("we'll meet that phrase again"). It never grades.
+
+## Memory (evolves with me)
+
+- On this device only (`localStorage`), it stores how far the dialogue has come, the last
+  raga, and which techniques (glide, swell, pulse, shake) it has heard at least once. There
+  are no scores and no streaks. Settings has "Forget our history".
+- A returning player resumes at min(exchanges, 12), and a shared raga re-emerges after one
+  phrase ("We're back in Bhupali").
+- The ornament move demonstrates **unheard** techniques more often. It teaches what's missing.
 
 ## Raga emergence
 
@@ -74,3 +91,15 @@ If you used a meend yourself, the companion mirrors it in its echo. Being heard 
    the next turn.
 
 Code: `src/music/companion.ts`, `src/music/ragas.ts`, check in `src/music/check.ts`.
+
+## Validation status (update whenever real evidence arrives)
+
+A skill is a hypothesis until it's checked against real playing or a real expert.
+Record what it has been checked against, so no one mistakes a guess for a fact.
+
+| Claim | Checked against | Status |
+|---|---|---|
+| Move weights and trust thresholds | Author's judgement | **Guesses.** Tune by playing sessions |
+| "Caught" = 80% LCS | Unit tests only | Unvalidated with a learner |
+| Whispers never grade | Tested (no digits, "wrong", "score") | Enforced |
+| Tala | — | **Missing.** Needs its own skill: theka, tempo tracking, sam |

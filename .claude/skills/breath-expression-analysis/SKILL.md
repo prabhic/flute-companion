@@ -66,3 +66,18 @@ ignores, or randomises these is flattening the player's voice.
 
 Code: `src/audio/phrase.ts` (analysis), `src/audio/pitch.ts` (breathy YIN),
 `src/hooks/useCompanion.ts` (frames, dynamic reference).
+
+## Validation status (update whenever real evidence arrives)
+
+A skill is a hypothesis until it's checked against real playing or a real expert.
+Record what it has been checked against, so no one mistakes a guess for a fact.
+
+| Claim | Checked against | Status |
+|---|---|---|
+| Pulse = ≥ 6 dB dip + ≥ 4 dB rise | Synthetic envelopes, chosen to separate pulse from ±3 dB tremolo | **Guess.** Measure gentle real pushes (fixture #5) |
+| Accent, swell/fade, tremolo, andolan thresholds | Synthetic envelopes | **Guesses** |
+| Airy tone detected (clarity ≥ 0.6) | Sine + heavy noise | Plausible; real airy alap untested |
+| Pressure pulls pitch 10–25¢ sharp | Acoustics literature | Not measured on this player's flute |
+
+The player reported the original gap (breath strength ignored) from real playing within minutes.
+Synthetic tests never caught it. Real fixtures are the priority.

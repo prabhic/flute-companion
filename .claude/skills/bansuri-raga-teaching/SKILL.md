@@ -98,3 +98,18 @@ tried yet. Detection details: `breath-expression-analysis`.
 - [ ] Breath expression (strength, pulses, swells) survives from input to reply
 
 Code: `src/music/swara.ts`, `src/music/ragas.ts`, `src/music/companion.ts`.
+
+## Validation status (update whenever real evidence arrives)
+
+A skill is a hypothesis until it's checked against real playing or a real expert.
+Record what it has been checked against, so no one mistakes a guess for a fact.
+
+| Claim | Checked against | Status |
+|---|---|---|
+| Raga note sets (semitone table) | Standard references | Believed correct |
+| Pakad phrases | Author's knowledge only | **Needs teacher review.** Kafi's is a plain scale run; Durga's and Bhairav's are approximate |
+| Resting notes / vadi | Author's knowledge only | **Needs teacher review.** Varies by gharana |
+| Breath technique descriptions | User's own account + acoustics literature | Partly confirmed by the player |
+| Pedagogy order (echo → vary → lead) | Guru-shishya tradition, not tested with learners | Unvalidated |
+
+When a bansuri teacher reviews this file, note their name and the date here.

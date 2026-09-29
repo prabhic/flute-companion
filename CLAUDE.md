@@ -19,8 +19,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 A **bansuri companion** (see `VISION.md`): it listens to a phrase, then plays it back —
-echoing, gently correcting into the raga, extending, answering, and progressively
-introducing ornaments and raga phrases. No scores, no Western notation.
+echoing in the player's **own recorded sound** (only corrected notes are pitch-shifted),
+extending, answering, and progressively introducing ornaments. Once a raga is known it also
+**leads**: offers a phrase, recognises when it's caught, replays it after a miss. It remembers
+the player across sessions (localStorage, never scores). No Western notation.
 
 ### Expert skills (load before working in that area)
 `.claude/skills/` holds six project skills — use them:
@@ -35,9 +37,12 @@ introducing ornaments and raga phrases. No scores, no Western notation.
 
 ### Flow
 ```
-mic → AnalyserNode → rms gate + yin() → frames {cents, db, air}
-    → (silence 0.7s) segmentNotes() (pitch + breath expression per note) → matchRaga() histogram → composeResponse()
-    → playPhrase() through one AudioContext (mic muted until reply + reverb tail)
+mic → capture worklet (audio thread, 2048/1024 hop, audio-clock time)
+    → rms + yin() → flute-range gate (≥ −700¢; drone can't trigger) → frames {cents, db, air}
+    → phrase recorded + (silence 0.7s) segmentNotes() (pitch + breath expression, note `at`)
+    → matchRaga() → composeResponse() (echo/extend/answer/ornament/pakad/breath/lead)
+    → playOwnVoice() for mirrored notes + playPhrase() synth for the rest
+      (mic muted until reply + reverb tail; Rest fades out and clears timers)
 ```
 
 ### Files
@@ -48,7 +53,10 @@ src/music/companion.ts  composeResponse: echo/extend/answer/ornament/pakad (pure
 src/music/check.ts      runnable self-check for all pure code → `npm run check`
 src/audio/pitch.ts      yin(), rms() (pure)
 src/audio/phrase.ts     segmentNotes(): notes + meend + breath expression (pure)
-src/audio/voice.ts      Web Audio: output bus + reverb, playPhrase(), startDrone()
+src/audio/voice.ts      Web Audio: output bus + reverb, playPhrase(), playOwnVoice(), startDrone()
+public/capture.worklet.js  audio-thread capture (served as a file: worklets can't load data: URLs)
+src/components/HeardPanel.tsx  hidden "What I heard" view (?heard or H) + fixture export
+fixtures/               real-playing fixtures; npm run check fails if analysis disagrees
 src/hooks/useCompanion.ts  the listen → respond state machine (loop state in refs!)
 src/components/Companion.tsx  the whole UI
 ```
@@ -56,7 +64,11 @@ src/components/Companion.tsx  the whole UI
 ### Rules
 - Pure modules in `src/music` and `src/audio/{pitch,phrase}.ts` use relative `.ts` imports
   so `npm run check` runs them in Node without a bundler. Keep them free of DOM/Web Audio.
-- Never read React state inside the rAF loop — use the `s` ref in `useCompanion`.
+- Analysis runs in `onWindow` (called by the worklet), never a rAF loop. Its state lives in
+  the `s` ref in `useCompanion`, never React state.
+- **Thresholds are tuned against `fixtures/`, not synthetic tests.** Each skill has a
+  "Validation status" table: update it when real evidence arrives, and don't present a guess
+  as fact.
 - One AudioContext for mic and output; create/resume it inside a click handler.
 - `raga-server/` + `raga-models/` (Carnatic deep model) are **not wired in**: the model
   expects 5000-token tonic-normalised sequences from long recordings, not live phrases.
@@ -65,3 +77,11 @@ src/components/Companion.tsx  the whole UI
 - `npm run dev` (port 5180) · `npm run build` · `npm run lint` · `npm run check`
 - Node + npm (not Bun). Mic requires localhost or HTTPS.
 - TS is relaxed (`strict: false`); path alias `@/*` → `src/*`.
+
+## Not done yet (from the review)
+- **Tala**: no rhythm anywhere. Needs its own skill (theka, tempo following, sam) before code.
+- **Authentic dhuns**: lead phrases come from pakad fragments and scale walks; real tunes
+  need a bansuri teacher's input, not invention.
+- **Pitch correction without time change** (PSOLA / phase vocoder) for own-voice echoes.
+- **Hearing while the companion plays** (turn-taking is strict; needs echo cancellation).
+- Never tested on a real bansuri, iOS/Safari, or listened to by a musician.

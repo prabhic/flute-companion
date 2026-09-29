@@ -44,6 +44,17 @@ out → dry + ConvolverNode(generated IR, ~2.4s) wet 0.22 → master
 - **Tuning.** Use just ratios against Sa (see `bansuri-raga-teaching`). Output frequency =
   Sa × ratio × 2^octave.
 
+## The player's own sound (preferred for echoes)
+
+The most human playback is the player's. Each phrase is recorded (with ~0.17s pre-roll), and
+echo, breath and extend moves replay that recording segment by segment (`playOwnVoice`):
+- Only notes the companion corrected or moved are shifted, by `playbackRate = 2^(¢/1200)`.
+  Pitch and time change together (~6% per semitone), which is acceptable for small
+  corrections. Larger moves (the breath move's raga step) begin to sound thinner.
+- 12ms crossfades at segment joins. Normalise quiet recordings to ~0.6 peak, capped at ×8.
+- Extend = your own phrase, then the companion's synth continues, like a duet.
+- Upgrade path: a phase vocoder or PSOLA, to correct pitch without changing timing.
+
 ## Tanpura drone
 
 - Strings: Pa(mandra), Sa, Sa, Sa(kharaj). With base = Sa/2, that is `base·0.75, base, base, base·0.5`.
@@ -70,3 +81,14 @@ out → dry + ConvolverNode(generated IR, ~2.4s) wet 0.22 → master
    flautist wince?
 
 Code: `src/audio/voice.ts`.
+
+## Validation status (update whenever real evidence arrives)
+
+A skill is a hypothesis until it's checked against real playing or a real expert.
+Record what it has been checked against, so no one mistakes a guess for a fact.
+
+| Claim | Checked against | Status |
+|---|---|---|
+| Synth voice "doesn't sound robotic" | **Never listened to by a musician** | Unvalidated: the top risk |
+| Own-voice correction replays the right segments and shifts | Instrumented browser test (Ma → Ga, rate 0.9439) | Mechanically verified; not listened to |
+| Tanpura drone sounds like a tanpura | Not listened to | Unvalidated |
