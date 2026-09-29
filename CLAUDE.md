@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Essential Commands
-- `npm run dev` - Start development server on port 8080 with hot reload
+- `npm run dev` - Start development server on port 5180 with hot reload
 - `npm run build` - Build for production
 - `npm run build:dev` - Build in development mode
 - `npm run lint` - Run ESLint to check code quality
@@ -13,106 +13,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Environment Setup
 - Uses **Node.js with npm** for package management (not Bun, despite bun.lockb presence)
-- Development server runs on `localhost:8080` with IPv6 support (`::`)
+- Development server runs on `localhost:5180` with IPv6 support (`::`)
 - Microphone access requires localhost or HTTPS for browser security
 
 ## Architecture Overview
 
-### Core Application Structure
-This is an **AI-powered flute training application** built with React, TypeScript, and audio processing capabilities. The app provides real-time pitch detection, musical analysis, and AI-powered feedback for flute practice.
+A **bansuri companion** (see `VISION.md`): it listens to a phrase, then plays it back —
+echoing, gently correcting into the raga, extending, answering, and progressively
+introducing ornaments and raga phrases. No scores, no Western notation.
 
-**Tech Stack:**
-- **Frontend Framework:** Vite + React + TypeScript
-- **UI Components:** shadcn/ui + Radix UI primitives 
-- **Styling:** Tailwind CSS with custom audio/flow state color schemes
-- **Audio Processing:** Web Audio API with real-time pitch detection
-- **AI Integration:** OpenAI API for musical analysis and feedback
-- **State Management:** React hooks with custom audio/musical analysis hooks
+### Expert skills (load before working in that area)
+`.claude/skills/` holds six project skills — use them:
+- `bansuri-raga-teaching` — raga data, sargam, just intonation, ornaments, pedagogy
+- `realtime-pitch-dsp` — YIN, phrase gating, segmentation, mic/feedback rules
+- `breath-expression-analysis` — HOW a note is blown: strength, breath pulses, accent, swell/fade,
+  tremolo vs andolan, airy tone, lip shading. On bansuri the mouth is the instrument — never
+  drop loudness or merge same-swara notes without checking this skill.
+- `flute-sound-synthesis` — breathy voice, meend/kan playback, tanpura, reverb
+- `musical-companion-dialogue` — response moves, raga emergence, whispers
+- `calm-practice-ux` — orb-centred, metric-free UI and copy
 
-### Key Domain Concepts
-
-**Audio Processing Flow:**
-1. **Microphone Input** → Real-time audio stream capture
-2. **Pitch Detection** → Frequency analysis using Web Audio API 
-3. **Musical Analysis** → Pattern recognition and phrase analysis
-4. **AI Feedback** → OpenAI-powered musical advice and suggestions
-
-**Component Architecture:**
-- **FluteTrainer** - Main training interface with audio engine
-- **MicrophoneController** - Basic microphone access demo
-- **MicrophoneTroubleshooter** - Diagnostic tools for audio issues
-- **AudioVisualizer** - Real-time waveform and spectrum visualization
-- **PitchIndicator** - Visual feedback for pitch accuracy
-- **MusicalAdvice** - AI-generated practice suggestions
-
-### Custom Hooks Architecture
-- **useMicrophone** - Manages microphone permissions and stream access
-- **usePitchDetector** - Real-time frequency detection using FFT analysis
-- **useMusicalAnalysis** - Combines pitch data with AI analysis for feedback
-- **useToast** - UI notifications for user feedback
-
-### Services Layer
-- **musicAI.ts** - OpenAI integration for musical phrase analysis
-  - Fallback to rule-based analysis when API key not provided
-  - Musical pattern recognition and practice recommendations
-
-## Development Patterns
-
-### Audio Processing Requirements
-- **Real-time Performance:** Audio processing runs in requestAnimationFrame loops
-- **Browser Security:** Microphone access requires user gesture and secure context
-- **Resource Management:** Proper cleanup of audio contexts, streams, and analysis nodes
-- **Error Handling:** Comprehensive permission and hardware error handling
-
-### Component Patterns
-- **Ref-based Audio Engine:** Audio contexts and nodes managed via useRef for persistence
-- **State Separation:** UI state separate from audio processing state
-- **Progressive Enhancement:** Basic functionality without API keys, enhanced with AI
-
-### Custom Tailwind Theme
-- **Audio Colors:** `wave-*` for waveform visualization colors
-- **Flow State Colors:** `flow-*` for different practice session states  
-- **Musical Feedback:** Custom color schemes for pitch accuracy feedback
-
-## File Organization
-
+### Flow
 ```
-src/
-├── components/           # React components
-│   ├── ui/              # shadcn/ui component library
-│   ├── FluteTrainer.tsx # Main training interface
-│   ├── MicrophoneController.tsx # Basic mic demo
-│   ├── AudioVisualizer.tsx # Audio visualization
-│   └── PitchIndicator.tsx # Pitch feedback UI
-├── hooks/               # Custom React hooks
-│   ├── useMicrophone.ts # Microphone access management
-│   ├── usePitchDetector.ts # Real-time pitch detection
-│   └── useMusicalAnalysis.ts # AI-powered analysis
-├── services/            # External service integrations
-│   └── musicAI.ts       # OpenAI musical analysis
-├── pages/               # Route components
-└── lib/                 # Utilities and configuration
+mic → AnalyserNode → rms gate + yin() → frames {cents, db, air}
+    → (silence 0.7s) segmentNotes() (pitch + breath expression per note) → matchRaga() histogram → composeResponse()
+    → playPhrase() through one AudioContext (mic muted until reply + reverb tail)
 ```
 
-## Important Notes
+### Files
+```
+src/music/swara.ts      sargam labels, just ratios, bansuri keys (pure)
+src/music/ragas.ts      7 beginner ragas, matchRaga, histogram (pure)
+src/music/companion.ts  composeResponse: echo/extend/answer/ornament/pakad (pure, seeded rng)
+src/music/check.ts      runnable self-check for all pure code → `npm run check`
+src/audio/pitch.ts      yin(), rms() (pure)
+src/audio/phrase.ts     segmentNotes(): notes + meend + breath expression (pure)
+src/audio/voice.ts      Web Audio: output bus + reverb, playPhrase(), startDrone()
+src/hooks/useCompanion.ts  the listen → respond state machine (loop state in refs!)
+src/components/Companion.tsx  the whole UI
+```
 
-### Audio Development Considerations
-- **Microphone Permissions:** Always handle getUserMedia() failures gracefully
-- **Audio Context State:** Check audioContext.state before creating nodes
-- **Cross-browser Compatibility:** Use AudioContext fallbacks for older browsers
-- **Performance:** Limit FFT size and analysis frequency for real-time performance
+### Rules
+- Pure modules in `src/music` and `src/audio/{pitch,phrase}.ts` use relative `.ts` imports
+  so `npm run check` runs them in Node without a bundler. Keep them free of DOM/Web Audio.
+- Never read React state inside the rAF loop — use the `s` ref in `useCompanion`.
+- One AudioContext for mic and output; create/resume it inside a click handler.
+- `raga-server/` + `raga-models/` (Carnatic deep model) are **not wired in**: the model
+  expects 5000-token tonic-normalised sequences from long recordings, not live phrases.
 
-### AI Integration
-- **API Key Management:** OpenAI API key configurable in UI (not environment)
-- **Graceful Degradation:** Application functions without API key using rule-based analysis
-- **Rate Limiting:** Consider implementing request throttling for AI calls
-
-### UI/UX Patterns
-- **Permission Flows:** Clear user guidance for microphone access
-- **Real-time Feedback:** Visual indicators for audio input levels and pitch accuracy
-- **Responsive Design:** Works on desktop and tablet (mobile microphone limitations)
-
-### TypeScript Configuration
-- **Relaxed Settings:** `noImplicitAny: false` and `strictNullChecks: false` for rapid development
-- **Path Aliases:** `@/*` maps to `./src/*` for clean imports
-- **Unused Variables:** ESLint rule disabled (`@typescript-eslint/no-unused-vars: "off"`)
+## Commands
+- `npm run dev` (port 5180) · `npm run build` · `npm run lint` · `npm run check`
+- Node + npm (not Bun). Mic requires localhost or HTTPS.
+- TS is relaxed (`strict: false`); path alias `@/*` → `src/*`.

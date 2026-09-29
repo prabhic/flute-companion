@@ -1,3 +1,8 @@
+> **Status (2026-09-29):** the app no longer calls this server. Raga detection now runs in the
+> browser (`src/music/ragas.ts`) over Hindustani beginner ragas. The Carnatic model here needs
+> 5000-token tonic-normalised pitch sequences from long recordings; wiring it in properly means
+> computing those features from a whole session, not per phrase. Kept for that future work.
+
 # 🎋 Raga Detection Integration Setup
 
 Your Echo Flute Flow app now has **AI-powered raga detection** using the state-of-the-art models from the automatic-raga-recognition repository!
@@ -13,7 +18,7 @@ cd raga-server
 # 2. In another terminal, start your main app
 npm run dev
 
-# 3. Access the app at http://localhost:8080
+# 3. Access the app at http://localhost:5180
 ```
 
 ### Option 2: Traditional Pattern Mode (Fallback)

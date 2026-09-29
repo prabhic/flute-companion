@@ -7,7 +7,8 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5180,
+    strictPort: true, // 8080 clashes with a local Java service
     // For microphone access in development, ensure you're using localhost
     // If you need HTTPS, uncomment the lines below and provide certificates
     // https: {
