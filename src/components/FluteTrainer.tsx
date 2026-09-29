@@ -4,9 +4,9 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { AudioVisualizer } from './AudioVisualizer';
 import { PitchIndicator } from './PitchIndicator';
-import { MusicalAdvice } from './MusicalAdvice';
-import { useMusicalAnalysis } from '@/hooks/useMusicalAnalysis';
-import { musicAI } from '@/services/musicAI';
+import { RagaMood } from './RagaMood';
+import { useRagaAnalysis } from '@/hooks/useRagaAnalysis';
+import { ragaAI } from '@/services/ragaAI';
 import { Mic, MicOff, Play, Volume2, AlertTriangle, Settings, Key } from 'lucide-react';
 
 export const FluteTrainer: React.FC = () => {
@@ -18,7 +18,7 @@ export const FluteTrainer: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   
-  const { feedback, analyzeLiveAudio, startPhrase, endPhrase, clearAnalysis } = useMusicalAnalysis();
+  const { feedback, analyzeLiveAudio, startPhrase, endPhrase, clearAnalysis } = useRagaAnalysis();
 
   // Audio engine refs
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -57,28 +57,44 @@ export const FluteTrainer: React.FC = () => {
     // Perform live pitch analysis
     analyzeLiveAudio(analyser);
 
-    // Simple phrase gate with enhanced detection
+    // Simple phrase gate with enhanced detection and logging
     const now = performance.now();
-    const onThresh = 0.06; // start phrase
-    const offThresh = 0.03; // likely silence
+    const onThresh = 0.04; // Lower threshold for easier triggering
+    const offThresh = 0.02; // Lower silence threshold
+
+    // Debug logging every 2 seconds
+    if (now % 2000 < 16) {
+      console.log(`Audio level: ${rms.toFixed(3)}, Playing: ${isPlayingPhrase}, Cooldown: ${cooldownRef.current}`);
+    }
 
     if (rms > onThresh) {
       if (!isPlayingPhrase) {
+        console.log('🎵 Phrase started! RMS:', rms.toFixed(3));
         setIsPlayingPhrase(true);
         startPhrase();
       }
       silenceStartRef.current = null;
     } else {
       if (isPlayingPhrase) {
-        if (!silenceStartRef.current) silenceStartRef.current = now;
-        if (silenceStartRef.current && now - silenceStartRef.current > 700) {
+        if (!silenceStartRef.current) {
+          silenceStartRef.current = now;
+          console.log('🔇 Silence detected, starting timer...');
+        }
+        const silenceDuration = now - silenceStartRef.current;
+        if (silenceStartRef.current && silenceDuration > 500) { // Shorter silence detection
           // Phrase ended → trigger AI response once, with cooldown
+          console.log('🎼 Phrase ended after', silenceDuration, 'ms silence. Triggering response...');
           setIsPlayingPhrase(false);
           if (!cooldownRef.current) {
             cooldownRef.current = true;
             handleAudioResponse().finally(() => {
-              setTimeout(() => (cooldownRef.current = false), 1200);
+              setTimeout(() => {
+                cooldownRef.current = false;
+                console.log('✅ Cooldown ended, ready for next phrase');
+              }, 2000);
             });
+          } else {
+            console.log('⏱️ In cooldown, skipping response');
           }
         }
       }
@@ -162,45 +178,72 @@ export const FluteTrainer: React.FC = () => {
   const handleAudioResponse = useCallback(async () => {
     setIsResponding(true);
     
-    // Get AI analysis of the phrase
-    const analysis = await endPhrase();
-    
-    const ctx = audioCtxRef.current;
-    if (ctx && analysis) {
-      // Ensure context is running
-      if (ctx.state === 'suspended') {
-        try { await ctx.resume(); } catch {}
-      }
-
-      // Play AI-generated response using the analysis
-      const notes = analysis.notes;
-      if (notes.length > 0) {
-        const startT = ctx.currentTime + 0.1;
-        let t = startT;
-
-        for (const note of notes) {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(note.frequency, t);
-          
-          gain.gain.setValueAtTime(0.0001, t);
-          gain.gain.linearRampToValueAtTime(0.1, t + 0.05);
-          gain.gain.linearRampToValueAtTime(0.0001, t + note.duration - 0.05);
-          
-          osc.connect(gain).connect(ctx.destination);
-          osc.start(t);
-          osc.stop(t + note.duration);
-          
-          t += note.duration;
+    try {
+      // Get AI analysis of the phrase
+      const analysis = await endPhrase();
+      
+      if (analysis && analysis.notes.length > 0) {
+        // Create separate AudioContext for playback to avoid conflicts
+        const playbackCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        
+        // Ensure context is running
+        if (playbackCtx.state === 'suspended') {
+          await playbackCtx.resume();
         }
 
-        await new Promise((r) => setTimeout(r, (t - startT + 0.2) * 1000));
+        // Play Raga-appropriate response using the analysis
+        const notes = analysis.notes;
+        console.log(`🎋 Playing ${analysis.ragaMood?.ragaName || 'traditional'} response with ${notes.length} notes`);
+        
+        if (analysis.ragaMood) {
+          console.log(`🎵 Raga: ${analysis.ragaMood.ragaName} (${analysis.ragaMood.mood}) - ${(analysis.ragaMood.confidence * 100).toFixed(1)}% confidence`);
+        }
+        const startT = playbackCtx.currentTime + 0.1;
+        let t = startT;
+
+        console.log(`Playing ${notes.length} notes:`, notes);
+
+        for (const note of notes) {
+          try {
+            const osc = playbackCtx.createOscillator();
+            const gain = playbackCtx.createGain();
+            
+            // Use a more pleasant sound
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(note.frequency, t);
+            
+            // Increase volume and improve envelope
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.1, t + note.duration * 0.7);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + note.duration);
+            
+            osc.connect(gain).connect(playbackCtx.destination);
+            osc.start(t);
+            osc.stop(t + note.duration);
+            
+            t += note.duration;
+          } catch (error) {
+            console.error('Error creating oscillator:', error);
+          }
+        }
+
+        // Wait for playback to finish
+        const totalDuration = (t - startT + 0.2) * 1000;
+        console.log(`Waiting ${totalDuration}ms for playback to complete`);
+        await new Promise((resolve) => setTimeout(resolve, totalDuration));
+        
+        // Clean up playback context
+        await playbackCtx.close();
+      } else {
+        console.log('No notes to play - using fallback delay');
+        // Fallback for simple response
+        await new Promise((resolve) => setTimeout(resolve, 1800));
       }
-    } else {
-      // Fallback for simple response
-      await new Promise((r) => setTimeout(r, 1800));
+    } catch (error) {
+      console.error('Audio response error:', error);
+      // Fallback for any error
+      await new Promise((resolve) => setTimeout(resolve, 1800));
     }
 
     setIsResponding(false);
@@ -233,8 +276,60 @@ export const FluteTrainer: React.FC = () => {
 
   const handleApiKeyChange = (key: string) => {
     setApiKey(key);
-    musicAI.setApiKey(key);
+    // Store for potential OpenAI integration with raga responses
+    localStorage.setItem('openai_api_key', key);
   };
+
+  // Test playback function to verify audio system
+  const testPlayback = useCallback(async () => {
+    console.log('🧪 Testing playback system...');
+    try {
+      const testCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      if (testCtx.state === 'suspended') {
+        await testCtx.resume();
+      }
+
+      // Play a simple test melody
+      const testNotes = [
+        { frequency: 440, duration: 0.5 }, // A4
+        { frequency: 493.88, duration: 0.5 }, // B4
+        { frequency: 523.25, duration: 0.5 }, // C5
+        { frequency: 587.33, duration: 0.7 }  // D5
+      ];
+
+      const startT = testCtx.currentTime + 0.1;
+      let t = startT;
+
+      console.log('Playing test notes:', testNotes);
+
+      for (const note of testNotes) {
+        const osc = testCtx.createOscillator();
+        const gain = testCtx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(note.frequency, t);
+        
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.3, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.1, t + note.duration * 0.7);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + note.duration);
+        
+        osc.connect(gain).connect(testCtx.destination);
+        osc.start(t);
+        osc.stop(t + note.duration);
+        
+        t += note.duration;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, (t - startT + 0.2) * 1000));
+      await testCtx.close();
+      
+      console.log('✅ Test playback completed');
+    } catch (error) {
+      console.error('❌ Test playback failed:', error);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen p-6">
@@ -242,10 +337,10 @@ export const FluteTrainer: React.FC = () => {
         {/* Header */}
         <div className="text-center space-y-4">
           <h1 className="text-6xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent animate-gentle-pulse">
-            FlowFlute
+            Echo Flute Flow
           </h1>
           <p className="text-xl text-muted-foreground">
-            Your AI musical companion - Play, pause, and hear me flow back
+            Your Bansuri companion - Play a phrase, I'll respond with raga wisdom
           </p>
         </div>
 
@@ -341,6 +436,42 @@ export const FluteTrainer: React.FC = () => {
                 <Settings className="w-5 h-5" />
               </Button>
 
+              {/* Test Playback Button */}
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={testPlayback}
+                disabled={isResponding}
+                className="px-4"
+                title="Test audio playback system"
+              >
+                <Play className="w-5 h-5" />
+                Test Audio
+              </Button>
+
+              {/* Manual AI Response Trigger */}
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {
+                  if (!cooldownRef.current && !isResponding) {
+                    console.log('🔧 Manual AI response trigger');
+                    cooldownRef.current = true;
+                    handleAudioResponse().finally(() => {
+                      setTimeout(() => {
+                        cooldownRef.current = false;
+                      }, 2000);
+                    });
+                  }
+                }}
+                disabled={isResponding || cooldownRef.current}
+                className="px-4"
+                title="Force AI response (for testing)"
+              >
+                <Volume2 className="w-5 h-5" />
+                Force Response
+              </Button>
+
               {isResponding && (
                 <Button variant="pulse" size="lg" disabled>
                   <Play className="w-5 h-5 animate-pulse" />
@@ -351,8 +482,8 @@ export const FluteTrainer: React.FC = () => {
 
             {/* Instructions */}
             <div className="text-center text-sm text-muted-foreground space-y-2">
-              <p>🎵 Play a short phrase, then pause — I’ll answer musically.</p>
-              <p>✨ Best results with a quiet room and mic access allowed.</p>
+              <p>🎋 Play a phrase on your bansuri, then pause — I'll respond in the same raga mood.</p>
+              <p>✨ Let your musical expression flow naturally, I'll follow your lead.</p>
             </div>
           </div>
         </Card>
@@ -363,18 +494,18 @@ export const FluteTrainer: React.FC = () => {
             pitch={feedback.currentPitch} 
             accuracy={feedback.pitchAccuracy} 
           />
-          <MusicalAdvice 
-            analysis={feedback.phraseAnalysis} 
+          <RagaMood 
+            analysis={feedback.ragaResponse} 
             isAnalyzing={feedback.isAnalyzing} 
           />
         </div>
 
-        {/* Practice Tips */}
+        {/* Practice Philosophy */}
         <div className="grid md:grid-cols-3 gap-4">
           {[
-            { title: 'Listen & Flow', description: "I'll follow your phrases and respond", icon: '🎼' },
-            { title: 'Natural Rhythm', description: 'Focus on expression, not perfection', icon: '🌊' },
-            { title: 'Conversation', description: 'We trade ideas like musicians', icon: '💫' },
+            { title: 'Raga Response', description: "I'll recognize your raga mood and respond accordingly", icon: '🎋' },
+            { title: 'Musical Dialogue', description: 'Express freely - I follow your emotional intent', icon: '💫' },
+            { title: 'Traditional Wisdom', description: 'Learn through musical conversation, not rules', icon: '🕉️' },
           ].map((tip, i) => (
             <Card key={i} className="backdrop-glass border-border/30 p-6 text-center space-y-3">
               <div className="text-3xl">{tip.icon}</div>

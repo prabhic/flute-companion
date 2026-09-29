@@ -90,19 +90,24 @@ export class MusicAIService {
 
   private generateSimpleResponse(phrase: MusicalPhrase): AIResponse {
     // Intelligent simple response based on input
-    const lastNote = phrase.notes[phrase.notes.length - 1];
-    const avgFreq = phrase.notes.reduce((sum, note) => sum + note.frequency, 0) / phrase.notes.length;
+    let avgFreq = 440; // Default to A4
+    let noteCount = 3; // Default note count
+    
+    if (phrase.notes.length > 0) {
+      avgFreq = phrase.notes.reduce((sum, note) => sum + note.frequency, 0) / phrase.notes.length;
+      noteCount = phrase.notes.length;
+    }
     
     // Generate a complementary response
-    const responseNotes = this.generateComplementaryNotes(avgFreq, phrase.notes.length);
+    const responseNotes = this.generateComplementaryNotes(avgFreq, noteCount);
     
     return {
       notes: responseNotes,
       analysis: {
-        detectedKey: this.detectSimpleKey(phrase.notes),
+        detectedKey: phrase.notes.length > 0 ? this.detectSimpleKey(phrase.notes) : 'C major',
         suggestedScale: 'pentatonic',
         rhythmPattern: phrase.duration < 2 ? 'quick' : 'flowing',
-        musicalAdvice: this.generateSimpleAdvice(phrase)
+        musicalAdvice: phrase.notes.length > 0 ? this.generateSimpleAdvice(phrase) : 'Try playing a simple melody!'
       }
     };
   }
@@ -110,10 +115,16 @@ export class MusicAIService {
   private generateComplementaryNotes(avgFreq: number, phraseLength: number): { frequency: number; duration: number; }[] {
     // Create a response that complements the input phrase
     const pentatonic = [1, 1.125, 1.25, 1.5, 1.667]; // Pentatonic ratios
-    const baseDuration = 0.4;
+    const baseDuration = 0.6; // Longer notes for better audibility
     
-    return Array.from({ length: Math.min(phraseLength + 1, 5) }, (_, i) => ({
-      frequency: avgFreq * pentatonic[i % pentatonic.length] * (0.8 + Math.random() * 0.4),
+    // Ensure we have a reasonable frequency range (300Hz - 800Hz for flute-like sounds)
+    const baseFreq = Math.max(300, Math.min(800, avgFreq || 440));
+    
+    // Generate 3-5 notes for a pleasant response
+    const noteCount = Math.max(3, Math.min(phraseLength + 1, 5));
+    
+    return Array.from({ length: noteCount }, (_, i) => ({
+      frequency: baseFreq * pentatonic[i % pentatonic.length] * (0.9 + Math.random() * 0.2),
       duration: baseDuration * (0.8 + Math.random() * 0.4)
     }));
   }
