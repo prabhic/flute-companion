@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { yin, rms } from '@/audio/pitch';
 import { segmentNotes, type Frame } from '@/audio/phrase';
 import { createOutput, playOwnVoice, playPhrase, startDrone, type Recording } from '@/audio/voice';
-import { composeResponse, type Note } from '@/music/companion';
+import { composeResponse, type Note, type Offer, type Technique } from '@/music/companion';
 import { addToHistogram, matchRaga, ragaById, type Raga } from '@/music/ragas';
 import { hzToCents, BANSURI_KEYS } from '@/music/swara';
 
@@ -17,6 +17,31 @@ interface Settings {
 
 const DEFAULTS: Settings = { saHz: BANSURI_KEYS.find((k) => k.key === 'E')!.saHz, tuned: false, ownVoice: true, ragaId: 'follow' };
 const STORE = 'echo-flute-flow:settings';
+
+// What the companion remembers of you between sessions — never a score (VISION: no gamification).
+interface Journey {
+  exchanges: number; // how far our dialogue has come
+  lastRaga: string | null;
+  heard: Record<Technique, number>; // techniques you have played at least once
+}
+const JOURNEY = 'echo-flute-flow:journey';
+const FRESH: Journey = { exchanges: 0, lastRaga: null, heard: { glide: 0, swell: 0, pulse: 0, shake: 0 } };
+const loadJourney = (): Journey => {
+  try {
+    const j = JSON.parse(localStorage.getItem(JOURNEY) ?? '{}');
+    return { ...FRESH, ...j, heard: { ...FRESH.heard, ...j.heard } };
+  } catch {
+    return FRESH;
+  }
+};
+const saveJourney = (j: Journey) => {
+  try {
+    localStorage.setItem(JOURNEY, JSON.stringify(j));
+  } catch {
+    /* private mode: we just won't remember */
+  }
+};
+const MAX_RESUME = 12; // a returning player resumes the dialogue, capped so it still starts gently
 
 const loadSettings = (): Settings => {
   try {
@@ -85,6 +110,8 @@ export function useCompanion() {
     recent: [] as (number | null)[], // last few frames' cents, for a steady live display
     awaitQuiet: false, // after tuning, the held Sa must end before a phrase can begin
     chunks: [] as { t: number; data: Float32Array }[], // the phrase being recorded (plus pre-roll)
+    journey: loadJourney(),
+    offer: null as Offer | null, // a phrase the companion offered, awaiting your echo
     settings,
   });
   s.current.settings = settings;
@@ -127,14 +154,27 @@ export function useCompanion() {
     if (!chosen) {
       st.hist = addToHistogram(st.hist, notes);
       const m = matchRaga(st.hist);
-      if (m && m.score >= 0.8 && st.phrases >= 3 && m.raga.id !== st.emerged?.id) {
+      const returning = m?.raga.id === st.journey.lastRaga; // a raga we shared before comes back sooner
+      if (m && m.score >= 0.8 && st.phrases >= (returning ? 1 : 3) && m.raga.id !== st.emerged?.id) {
         st.emerged = m.raga;
         setEmerged(m.raga);
-        story = `You've wandered into ${m.raga.name}. ${m.raga.story}`;
+        story = returning ? `We're back in ${m.raga.name}. ${m.raga.story}` : `You've wandered into ${m.raga.name}. ${m.raga.story}`;
       }
     }
 
-    const res = composeResponse(notes, { raga: chosen ?? st.emerged, exchange: st.exchange++ });
+    // Remember which techniques you've used, so demonstrations can favour the ones you haven't.
+    const j = st.journey;
+    if (notes.some((n) => n.glide)) j.heard.glide++;
+    if (notes.some((n) => n.shape === 'swell')) j.heard.swell++;
+    if (notes.some((n) => n.pulse)) j.heard.pulse++;
+    if (notes.some((n) => n.shake)) j.heard.shake++;
+    const unheard = (Object.keys(j.heard) as Technique[]).filter((k) => j.heard[k] === 0);
+
+    const raga = chosen ?? st.emerged;
+    const res = composeResponse(notes, { raga, exchange: st.exchange++, offer: st.offer, unheard });
+    st.offer = res.offer;
+    Object.assign(j, { exchanges: st.exchange, lastRaga: raga?.id ?? j.lastRaga });
+    saveJourney(j);
     setPlayed(notes);
     setReply(res.notes);
     setWhisper(story ?? res.whisper);
@@ -303,13 +343,17 @@ export function useCompanion() {
       sink.gain.value = 0; // keeps the worklet pulled by the graph without sounding the mic
       source.connect(capture).connect(sink).connect(ctx.destination);
       capture.port.onmessage = (e) => onWindow(e.data.win, e.data.t - st.hopSec);
+      st.journey = loadJourney();
+      const back = st.journey.exchanges > 0;
       Object.assign(st, {
-        stream, source, capture, hopSec: 1024 / ctx.sampleRate,
-        heardAt: ctx.currentTime, exchange: 0, phrases: 0, peakDb: -Infinity, hist: Array(12).fill(0),
+        stream, source, capture, hopSec: 1024 / ctx.sampleRate, offer: null,
+        heardAt: ctx.currentTime, exchange: Math.min(st.journey.exchanges, MAX_RESUME), phrases: 0, peakDb: -Infinity, hist: Array(12).fill(0),
       });
+      const last = back && st.journey.lastRaga ? ragaById(st.journey.lastRaga) : null;
+      const welcome = back ? (last ? `Welcome back. Last time we wandered in ${last.name}. ` : 'Welcome back. ') : '';
       keepAwake();
       if (st.settings.tuned) {
-        setWhisper("I'm listening. Play a phrase, then let it rest.");
+        setWhisper(`${welcome}I'm listening. Play a phrase, then let it rest.`);
         go('listening');
       } else {
         // First time with this flute: the opening exchange is Sa itself.
@@ -337,7 +381,7 @@ export function useCompanion() {
     st.capture?.disconnect();
     st.source?.disconnect();
     st.wakeLock?.release().catch(() => {});
-    Object.assign(st, { stream: null, source: null, capture: null, wakeLock: null, timers: [], stopVoice: null, frames: [], emerged: null, muteUntil: 0 });
+    Object.assign(st, { stream: null, source: null, capture: null, wakeLock: null, timers: [], stopVoice: null, frames: [], emerged: null, muteUntil: 0, offer: null });
     setReplyIdx(null);
     setEmerged(null);
     setLevel(0);
@@ -420,6 +464,11 @@ export function useCompanion() {
     begin, rest, tuneSa, toggleDrone, chooseRaga,
     tuneProgress, lastPhrase,
     setOwnVoice: (ownVoice: boolean) => setSettings((p) => ({ ...p, ownVoice })),
+    forget: () => {
+      saveJourney(FRESH);
+      Object.assign(s.current, { journey: { ...FRESH, heard: { ...FRESH.heard } }, exchange: 0, offer: null });
+      setWhisper("I've let go of our history. We begin again, fresh.");
+    },
     // A new key is only a guess at Sa (and its octave) — ask to hear it again.
     setSa: (saHz: number) => {
       setSettings((p) => ({ ...p, saHz, tuned: false }));

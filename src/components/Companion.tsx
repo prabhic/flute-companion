@@ -248,6 +248,16 @@ export function Companion() {
                 ))}
               </fieldset>
 
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  I remember, on this device only, how far our dialogue has come, our last raga, and which breath
+                  techniques I've heard from you — so I can pick up where we left off. Never a score.
+                </p>
+                <Button variant="ghost" size="sm" className="px-0 text-muted-foreground hover:text-foreground" onClick={c.forget}>
+                  Forget our history
+                </Button>
+              </div>
+
               <p className="flex gap-2 text-xs text-muted-foreground">
                 <Headphones className="w-4 h-4 shrink-0" />
                 With headphones I hear only you, and the drone won't confuse my ears.

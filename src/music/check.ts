@@ -111,6 +111,37 @@ const br = [...moves].find((r) => r.move === 'breath');
 assert.ok(br, 'breath move is offered when the player pulses');
 assert.ok(br.notes.every((n) => n.semi === 2) && br.notes.filter((n) => n.pulse).length === 2, 'same breaths, one raga step up');
 
+// The guru leads: offers a phrase, recognises when it's caught, replays it after a miss.
+let lead = null as ReturnType<typeof composeResponse> | null;
+for (let k = 1; k < 60 && !lead; k++) {
+  const r = composeResponse(bhupaliPhrase.slice(0, 5), { raga: bhupali, exchange: 8 }, seeded(k));
+  if (r.move === 'lead') lead = r;
+}
+assert.ok(lead && lead.offer, 'companion sometimes leads once a raga is known');
+assert.ok(lead.notes.every((n) => bhupali.notes.includes(pc(n.semi))), 'offered phrase stays in raga');
+for (let k = 1; k < 30; k++) {
+  assert.notEqual(composeResponse(played, { raga: null, exchange: 8 }, seeded(k)).move, 'lead', 'no leading before a raga');
+  assert.notEqual(composeResponse(played, { raga: bhupali, exchange: 1 }, seeded(k)).move, 'lead', 'no leading before trust');
+}
+const offer = lead.offer!;
+const caught = composeResponse(offer.notes.map((n) => ({ ...n })), { raga: bhupali, exchange: 9, offer }, seeded(4));
+assert.equal(caught.offer, null);
+assert.match(caught.whisper, /caught/);
+const wrong = offer.notes.map((n, i) => ({ ...n, semi: i === 1 ? n.semi + 1 : n.semi + (i > 1 ? 5 : 0) }));
+const retry = composeResponse(wrong, { raga: bhupali, exchange: 9, offer }, seeded(4));
+assert.deepEqual([retry.move, retry.offer?.tries, retry.notes], ['lead', 1, offer.notes], 'a miss replays the same phrase');
+assert.match(retry.whisper, /listen for the/);
+assert.doesNotMatch(retry.whisper, /\d|wrong|score/i);
+const letGo = composeResponse(wrong, { raga: bhupali, exchange: 9, offer: { ...offer, tries: 2 } }, seeded(4));
+assert.equal(letGo.offer, null, 'after two tries the guru lets it go');
+
+// Demonstrations favour techniques the player hasn't used yet.
+const longPhrase = [0, 2, 4, 7].map((semi) => ({ semi, dur: 0.8 }));
+const demos = (unheard: ('glide' | 'swell')[]) => Array.from({ length: 60 }, (_, k) =>
+  composeResponse(longPhrase, { raga: bhupali, exchange: 5, unheard }, seeded(k + 1))).filter((r) => r.move === 'ornament');
+const swellShare = (rs: ReturnType<typeof demos>) => rs.filter((r) => r.notes.some((n) => n.shape === 'swell')).length / rs.length;
+assert.ok(swellShare(demos(['swell'])) > swellShare(demos([])), 'unheard swell is demonstrated more');
+
 // Swara labels + just tuning.
 assert.equal(swara(6).roman, 'tivra Ma');
 assert.equal(swara(-3).short, '.Dha');

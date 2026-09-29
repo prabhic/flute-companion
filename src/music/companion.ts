@@ -18,17 +18,63 @@ export interface Note {
   at?: number; // when this note began in the player's recording (ctx time) — lets echoes use their own sound
 }
 
-export type Move = 'echo' | 'extend' | 'answer' | 'ornament' | 'pakad' | 'breath';
+export type Move = 'echo' | 'extend' | 'answer' | 'ornament' | 'pakad' | 'breath' | 'lead';
+
+/** A phrase the companion offered for the player to imitate (guru → shishya). */
+export interface Offer {
+  notes: Note[];
+  tries: number; // how many times it has been replayed after a miss
+}
 
 export interface Response {
   notes: Note[];
   move: Move;
   whisper: string;
+  offer: Offer | null; // phrase now awaiting imitation, if any
 }
+
+// Breath techniques the companion can demonstrate — it favours ones it hasn't heard from the player.
+export type Technique = 'glide' | 'swell' | 'pulse' | 'shake';
 
 export interface DialogueContext {
   raga: Raga | null; // null = still learning the player's notes
-  exchange: number; // how many exchanges so far this session
+  exchange: number; // how far the dialogue has come (persists across sessions)
+  offer?: Offer | null; // the companion's last offered phrase, awaiting imitation
+  unheard?: Technique[]; // techniques not yet heard from this player
+}
+
+const CAUGHT = 0.8; // share of the offered phrase the player must echo to have "caught" it
+const MAX_TRIES = 2;
+
+/** Longest common subsequence of pitch classes — octave slips still count as catching a note. */
+function similarity(a: Note[], b: Note[]) {
+  const x = a.map((n) => pc(n.semi));
+  const y = b.map((n) => pc(n.semi));
+  const dp = Array.from({ length: x.length + 1 }, () => Array(y.length + 1).fill(0));
+  for (let i = 1; i <= x.length; i++)
+    for (let j = 1; j <= y.length; j++)
+      dp[i][j] = x[i - 1] === y[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+  return dp[x.length][y.length] / Math.max(x.length, y.length);
+}
+
+/** A short phrase from the raga to offer: a piece of its pakad, or a rise and return through its notes. */
+function leadPhrase(raga: Raga, steps: number[], rng: () => number): Note[] {
+  let semis: number[];
+  if (rng() < 0.6 && raga.pakad.length >= 4) {
+    const len = Math.min(raga.pakad.length, 4 + Math.floor(rng() * 3));
+    const at = Math.floor(rng() * (raga.pakad.length - len + 1));
+    semis = raga.pakad.slice(at, at + len);
+  } else {
+    const sa = steps.indexOf(0);
+    const up = 2 + Math.floor(rng() * 3);
+    semis = [...steps.slice(sa, sa + up + 1), ...steps.slice(sa, sa + up).reverse()];
+  }
+  return semis.map((semi, i) => ({
+    semi,
+    dur: i === semis.length - 1 ? 1.1 : 0.5,
+    dyn: 0.55,
+    ...(i === semis.length - 1 ? { shape: 'fade' as const } : {}),
+  }));
 }
 
 const LOW = -5; // mandra Pa
@@ -91,6 +137,31 @@ function breathWhisper(notes: Note[]): string | null {
 }
 
 export function composeResponse(played: Note[], ctx: DialogueContext, rng: () => number = Math.random): Response {
+  // The guru offered a phrase last time: was it caught?
+  if (ctx.offer && played.length) {
+    const offer = ctx.offer;
+    if (similarity(played, offer.notes) >= CAUGHT) {
+      const r = composeFree(played, { ...ctx, offer: null }, rng, false);
+      return { ...r, whisper: 'You caught it — that phrase is yours now.' };
+    }
+    if (offer.tries < MAX_TRIES) {
+      // Correct by example: play it again, and name the first note that slipped.
+      const got = played.map((n) => pc(n.semi));
+      const miss = offer.notes.find((n, i) => got[i] !== pc(n.semi)) ?? offer.notes[0];
+      return {
+        notes: offer.notes,
+        move: 'lead',
+        whisper: `Once more — listen for the ${swara(miss.semi).roman}.`,
+        offer: { notes: offer.notes, tries: offer.tries + 1 },
+      };
+    }
+    const r = composeFree(played, { ...ctx, offer: null }, rng, false);
+    return { ...r, whisper: "Lovely try — we'll meet that phrase again." };
+  }
+  return composeFree(played, ctx, rng, true);
+}
+
+function composeFree(played: Note[], ctx: DialogueContext, rng: () => number, mayLead: boolean): Response {
   // Until a raga emerges, speak only in the player's own notes plus Sa and Pa.
   const pcs = ctx.raga ? ctx.raga.notes : [...new Set([0, 7, ...played.map((n) => pc(n.semi))])];
   const steps = ladder(pcs);
@@ -105,7 +176,7 @@ export function composeResponse(played: Note[], ctx: DialogueContext, rng: () =>
     const { kan: _kan, bend, ...breath } = n;
     return { ...breath, semi, dur: clampDur(n.dur), ...(fixed || bend === undefined ? {} : { bend }) };
   });
-  if (echo.length === 0) return { notes: [], move: 'echo', whisper: '' };
+  if (echo.length === 0) return { notes: [], move: 'echo', whisper: '', offer: null };
 
   const hold = (notes: Note[]) =>
     notes.map((n, i) => (i === notes.length - 1 ? { ...n, dur: clampDur(n.dur * 1.4) } : n));
@@ -124,7 +195,13 @@ export function composeResponse(played: Note[], ctx: DialogueContext, rng: () =>
     ['ornament', x < 4 ? 0 : 2],
     ['pakad', ctx.raga && x >= 6 ? 1 : 0],
     ['breath', breathy && x >= 2 ? 3 : 0],
+    ['lead', mayLead && ctx.raga && x >= 5 ? 1.5 : 0],
   ]);
+
+  if (move === 'lead' && ctx.raga) {
+    const notes = leadPhrase(ctx.raga, steps, rng);
+    return { notes, move, whisper: 'Now you follow me — echo this back.', offer: { notes, tries: 0 } };
+  }
 
   if (move === 'breath') {
     // Answer in the player's own breath language, one raga step higher.
@@ -133,6 +210,7 @@ export function composeResponse(played: Note[], ctx: DialogueContext, rng: () =>
     return {
       notes: hold(shifted),
       move,
+      offer: null,
       whisper: pulsed
         ? `Your breaths on ${swara(pulsed.semi).roman} — here they are on ${swara(shifted[echo.indexOf(pulsed)].semi).roman}.`
         : 'The same pushes of breath, one step higher. Blow with me.',
@@ -143,6 +221,7 @@ export function composeResponse(played: Note[], ctx: DialogueContext, rng: () =>
     return {
       notes: hold(ctx.raga.pakad.map((semi, i) => ({ semi, dur: beat * (i % 3 === 2 ? 1.5 : 1), glide: i > 0 && rng() < 0.2, dyn }))),
       move,
+      offer: null,
       whisper: `A gift — the phrase that makes ${ctx.raga.name} itself.`,
     };
   }
@@ -156,6 +235,7 @@ export function composeResponse(played: Note[], ctx: DialogueContext, rng: () =>
     return {
       notes: hold([...echo, ...tail]),
       move,
+      offer: null,
       whisper: `I carried your phrase on to ${swara(tail.at(-1)?.semi ?? last).roman}.`,
     };
   }
@@ -170,24 +250,29 @@ export function composeResponse(played: Note[], ctx: DialogueContext, rng: () =>
     const notes: Note[] = [{ semi: last, dur: beat }, ...out, ...home].map((n) => ({ ...n, dyn }));
     if (notes.at(-1)!.semi !== sa) notes.push({ semi: sa, dur: beat, dyn });
     notes[notes.length - 1].shape = 'fade';
-    return { notes: hold(notes), move, whisper: 'You asked; I answered — and brought it home to Sa.' };
+    return { notes: hold(notes), move, whisper: 'You asked; I answered — and brought it home to Sa.', offer: null };
   }
 
   if (move === 'ornament') {
+    // Favour demonstrating what this player hasn't played yet.
+    const unheard = ctx.unheard ?? [];
+    const glideP = unheard.includes('glide') ? 0.85 : 0.5;
     const notes = echo.map((n, i) => {
       if (n.dur < 0.5 || i === 0) return n;
       const up = steps[steps.indexOf(n.semi) + 1];
-      return rng() < 0.5 ? { ...n, glide: true } : { ...n, kan: up ?? n.semi };
+      return rng() < glideP ? { ...n, glide: true } : { ...n, kan: up ?? n.semi };
     });
     const hasKan = notes.some((n) => n.kan !== undefined);
     const longest = notes.reduce((a, b, i) => (b.dur > notes[a].dur ? i : a), 0);
-    if (!notes.some((n) => n.shape) && notes[longest].dur >= 0.6 && rng() < 0.5) {
+    const swellP = unheard.includes('swell') ? 0.9 : 0.5;
+    if (!notes.some((n) => n.shape) && notes[longest].dur >= 0.6 && rng() < swellP) {
       notes[longest] = { ...notes[longest], shape: 'swell' };
-      return { notes: hold(notes), move, whisper: `Listen — I let ${swara(notes[longest].semi).roman} grow with more breath. Try it.` };
+      return { notes: hold(notes), move, whisper: `Listen — I let ${swara(notes[longest].semi).roman} grow with more breath. Try it.`, offer: null };
     }
     return {
       notes: hold(notes),
       move,
+      offer: null,
       whisper: hasKan ? 'Hear that tiny touch before the long note? That is a kan.' : 'Listen to how I slide between notes — a meend.',
     };
   }
@@ -197,5 +282,5 @@ export function composeResponse(played: Note[], ctx: DialogueContext, rng: () =>
     : breathWhisper(echo) ?? (usedMeend
       ? 'I heard your glide — here it is back to you.'
       : pick(rng, [['Your phrase, back to you.', 1], ['I held your last note a little longer.', 1], ['Again, softly.', 1]]));
-  return { notes: hold(echo), move: 'echo', whisper };
+  return { notes: hold(echo), move: 'echo', whisper, offer: null };
 }
