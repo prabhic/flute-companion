@@ -153,7 +153,7 @@ export function segmentNotes(frames: Frame[], refDb?: number): Note[] {
   return merged.map((n, i) => {
     const ts = n.frames.map((f) => f.t);
     const dbs = n.frames.map((f) => f.db);
-    const note: Note = { semi: n.semi, dur: n.dur };
+    const note: Note = { semi: n.semi, dur: n.dur, at: n.start };
     if (n.glide) note.glide = true;
 
     note.dyn = +clamp01((mean(dbs) - (ref - DYN_RANGE)) / DYN_RANGE).toFixed(2);

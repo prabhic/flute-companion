@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { yin, rms } from '@/audio/pitch';
 import { segmentNotes, type Frame } from '@/audio/phrase';
-import { createOutput, playPhrase, startDrone } from '@/audio/voice';
+import { createOutput, playOwnVoice, playPhrase, startDrone, type Recording } from '@/audio/voice';
 import { composeResponse, type Note } from '@/music/companion';
 import { addToHistogram, matchRaga, ragaById, type Raga } from '@/music/ragas';
 import { hzToCents, BANSURI_KEYS } from '@/music/swara';
@@ -11,16 +11,17 @@ export type Phase = 'idle' | 'listening' | 'playing' | 'responding' | 'tuning';
 interface Settings {
   saHz: number;
   tuned: boolean; // Sa was measured from the player's own flute (octave included)
+  ownVoice: boolean; // echoes replay the player's own recording, not the synth flute
   ragaId: string; // 'follow' = let the raga emerge from the player
 }
 
-const DEFAULTS: Settings = { saHz: BANSURI_KEYS.find((k) => k.key === 'E')!.saHz, tuned: false, ragaId: 'follow' };
+const DEFAULTS: Settings = { saHz: BANSURI_KEYS.find((k) => k.key === 'E')!.saHz, tuned: false, ownVoice: true, ragaId: 'follow' };
 const STORE = 'echo-flute-flow:settings';
 
 const loadSettings = (): Settings => {
   try {
-    const { saHz, tuned, ragaId } = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORE) ?? '{}') };
-    return { saHz, tuned, ragaId };
+    const { saHz, tuned, ownVoice, ragaId } = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORE) ?? '{}') };
+    return { saHz, tuned, ownVoice, ragaId };
   } catch {
     return DEFAULTS;
   }
@@ -34,6 +35,9 @@ const TUNE_TIME = 1.5; // s of held Sa for calibration
 // -1200¢. Anything under this is the drone (or a hum), never the flute.
 const FLUTE_LOW = -700;
 const TUNE_STEADY = 40; // ¢ a held Sa may wander before the hold starts over
+const PREROLL = 8; // windows (~0.17s) kept before a phrase starts, so the attack isn't clipped
+// Moves that mirror the player's own notes can be voiced with the player's own recording.
+const OWN_MOVES = new Set(['echo', 'breath', 'extend']);
 
 export function useCompanion() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
@@ -80,6 +84,7 @@ export function useCompanion() {
     hopSec: 1024 / 48000,
     recent: [] as (number | null)[], // last few frames' cents, for a steady live display
     awaitQuiet: false, // after tuning, the held Sa must end before a phrase can begin
+    chunks: [] as { t: number; data: Float32Array }[], // the phrase being recorded (plus pre-roll)
     settings,
   });
   s.current.settings = settings;
@@ -112,7 +117,7 @@ export function useCompanion() {
     return st.ctx;
   };
 
-  const respond = (notes: Note[]) => {
+  const respond = (notes: Note[], rec: Recording | null) => {
     const st = s.current;
     const ctx = st.ctx!;
     const chosen = ragaById(st.settings.ragaId);
@@ -134,15 +139,41 @@ export function useCompanion() {
     setReply(res.notes);
     setWhisper(story ?? res.whisper);
 
-    const start = ctx.currentTime + 0.15;
-    const { end, stop } = playPhrase(ctx, st.out!, res.notes, st.settings.saHz, start);
-    st.stopVoice = stop;
+    // Leading notes that came from the player can be sung back in the player's own sound.
+    let own = 0;
+    if (st.settings.ownVoice && rec && OWN_MOVES.has(res.move)) {
+      while (own < res.notes.length && res.notes[own].at !== undefined) own++;
+    }
+    const source = (at: number) => notes.find((n) => n.at === at)!;
+    const cents = (n: Note) => n.semi * 100 + (n.bend ?? 0);
+
+    let t = ctx.currentTime + 0.15;
+    const starts: number[] = [];
+    const stops: (() => void)[] = [];
+    if (own > 0) {
+      const segs = res.notes.slice(0, own).map((n, i) => {
+        const src = source(n.at!);
+        const next = res.notes[i + 1];
+        return {
+          from: n.at! - (i === 0 ? 0.04 : 0),
+          to: i + 1 < own ? next.at! : src.at! + src.dur + (own === res.notes.length ? 0.25 : 0.05),
+          shift: cents(n) - cents(src), // 0 unless the companion corrected or moved this note
+        };
+      });
+      const v = playOwnVoice(ctx, st.out!, rec!, segs, t);
+      starts.push(...v.starts);
+      stops.push(v.stop);
+      t = v.end + 0.05;
+    }
+    const synth = res.notes.slice(own);
+    const v = playPhrase(ctx, st.out!, synth, st.settings.saHz, t);
+    stops.push(v.stop);
+    synth.reduce((at, n) => (starts.push(at), at + n.dur), t);
+    const end = synth.length ? v.end : t;
+    st.stopVoice = () => stops.forEach((f) => f());
+
     // Light up each swara of the reply as it sounds.
-    let t = start;
-    res.notes.forEach((n, i) => {
-      later(() => setReplyIdx(i), (t - ctx.currentTime) * 1000);
-      t += n.dur;
-    });
+    starts.forEach((at, i) => later(() => setReplyIdx(i), (at - ctx.currentTime) * 1000));
     st.muteUntil = end + TAIL;
     go('responding');
     later(() => {
@@ -167,6 +198,9 @@ export function useCompanion() {
       if (lvl > off) return;
       st.awaitQuiet = false;
     }
+    // Record the newest hop of samples: the phrase itself, or a short pre-roll while waiting.
+    st.chunks.push({ t: now, data: buf.slice(buf.length >> 1) });
+    if (st.phase !== 'playing' && st.chunks.length > PREROLL) st.chunks.shift();
 
     const inPhrase = st.phase === 'playing' || st.phase === 'tuning';
     const p = lvl > off ? yin(buf, ctx.sampleRate) : null;
@@ -229,9 +263,19 @@ export function useCompanion() {
       st.peakDb = Math.max(st.peakDb - 1, phrasePeak); // slowly forgets, so a quieter room re-scales
       const notes = segmentNotes(st.frames, st.peakDb);
       setLastPhrase({ frames: st.frames, refDb: st.peakDb, notes, saHz: st.settings.saHz });
+      const rec = toRecording(ctx, st.chunks);
+      st.chunks = [];
       if (notes.reduce((a, n) => a + n.dur, 0) < 0.25) return go('listening'); // a breath, not a phrase
-      respond(notes);
+      respond(notes, rec);
     }
+  };
+
+  const toRecording = (ctx: AudioContext, chunks: { t: number; data: Float32Array }[]): Recording | null => {
+    if (!chunks.length) return null;
+    const hop = chunks[0].data.length;
+    const buffer = ctx.createBuffer(1, hop * chunks.length, ctx.sampleRate);
+    chunks.forEach((c, i) => buffer.copyToChannel(c.data, 0, i * hop));
+    return { buffer, t0: chunks[0].t };
   };
 
   const keepAwake = async () => {
@@ -375,6 +419,7 @@ export function useCompanion() {
     raga: ragaById(settings.ragaId) ?? emerged,
     begin, rest, tuneSa, toggleDrone, chooseRaga,
     tuneProgress, lastPhrase,
+    setOwnVoice: (ownVoice: boolean) => setSettings((p) => ({ ...p, ownVoice })),
     // A new key is only a guess at Sa (and its octave) — ask to hear it again.
     setSa: (saHz: number) => {
       setSettings((p) => ({ ...p, saHz, tuned: false }));

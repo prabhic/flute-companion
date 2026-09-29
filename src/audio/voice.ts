@@ -207,3 +207,54 @@ export function startDrone(ctx: AudioContext, out: AudioNode, saHz: number) {
     window.setTimeout(() => bus.disconnect(), 2500);
   };
 }
+
+export interface Recording {
+  buffer: AudioBuffer;
+  t0: number; // ctx time of the buffer's first sample
+}
+
+export interface OwnSegment {
+  from: number; // ctx time in the recording
+  to: number;
+  shift: number; // cents to move this segment (0 = exactly as played)
+}
+
+const XFADE = 0.012; // s — overlap between segments so joins don't click
+
+/**
+ * Replay the player's own recording, segment by segment, pitch-shifting only where asked.
+ * playbackRate shifts pitch and stretches time together: a 100¢ correction changes that note's
+ * length by ~6%, which the ear accepts. Returns each segment's start so the UI can follow along.
+ */
+export function playOwnVoice(ctx: AudioContext, out: AudioNode, rec: Recording, segs: OwnSegment[], at = ctx.currentTime + 0.12) {
+  const bus = ctx.createGain();
+  const data = rec.buffer.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+  bus.gain.value = peak > 0 ? Math.min(8, 0.6 / peak) : 1; // quiet mics come back at a friendly level
+  bus.connect(out);
+
+  const starts: number[] = [];
+  let t = at;
+  segs.forEach((seg, i) => {
+    const rate = Math.pow(2, seg.shift / 1200);
+    const offset = Math.max(0, seg.from - rec.t0);
+    const len = Math.max(0.02, Math.min(seg.to, rec.t0 + rec.buffer.duration) - Math.max(seg.from, rec.t0));
+    const src = ctx.createBufferSource();
+    src.buffer = rec.buffer;
+    src.playbackRate.value = rate;
+    const g = ctx.createGain();
+    const outLen = len / rate;
+    const first = i === 0;
+    const last = i === segs.length - 1;
+    g.gain.setValueAtTime(first ? 1 : 0, t);
+    if (!first) g.gain.linearRampToValueAtTime(1, t + XFADE);
+    g.gain.setValueAtTime(1, t + outLen - (last ? 0.15 : 0));
+    g.gain.linearRampToValueAtTime(0, t + outLen + (last ? 0 : XFADE));
+    src.connect(g).connect(bus);
+    src.start(t, offset, len + (last ? 0 : XFADE * rate));
+    starts.push(t);
+    t += outLen;
+  });
+  return { end: t, starts, stop: () => fadeOut(ctx, bus) };
+}

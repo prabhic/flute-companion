@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Headphones, Settings2, Waves } from 'lucide-react';
 import { HeardPanel } from '@/components/HeardPanel';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useCompanion } from '@/hooks/useCompanion';
 import { RAGAS } from '@/music/ragas';
@@ -213,6 +214,16 @@ export function Companion() {
                         : 'When you Begin, I will ask for your Sa first.'}
                 </p>
               </div>
+
+              <label className="flex items-start justify-between gap-4 cursor-pointer">
+                <span>
+                  <span className="block">Echo in your own sound</span>
+                  <span className="block text-xs text-muted-foreground">
+                    I replay your breath and tone, touching only the notes I correct. Off: I answer on my own flute.
+                  </span>
+                </span>
+                <Switch checked={c.settings.ownVoice} onCheckedChange={c.setOwnVoice} />
+              </label>
 
               <fieldset className="space-y-2">
                 <legend className="text-sm text-muted-foreground mb-2">Wander in…</legend>

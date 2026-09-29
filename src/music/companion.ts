@@ -15,6 +15,7 @@ export interface Note {
   shake?: number; // pitch sway depth, cents (andolan / gamak)
   air?: number; // 0 clear … 1 airy tone
   bend?: number; // lip/angle shading from the swara centre, cents
+  at?: number; // when this note began in the player's recording (ctx time) — lets echoes use their own sound
 }
 
 export type Move = 'echo' | 'extend' | 'answer' | 'ornament' | 'pakad' | 'breath';
