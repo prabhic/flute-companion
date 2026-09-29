@@ -1,5 +1,6 @@
 // Self-check for the pure music + DSP core. Run: npm run check
 import assert from 'node:assert/strict';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { yin } from '../audio/pitch.ts';
 import { segmentNotes, type Frame } from '../audio/phrase.ts';
 import { matchRaga, addToHistogram, ragaById, RAGAS } from './ragas.ts';
@@ -117,3 +118,32 @@ assert.equal(semiToHz(7, 300), 450);
 assert.equal(semiToHz(12, 300), 600);
 
 console.log('✓ music + DSP core checks passed');
+
+// Real-playing fixtures (fixtures/README.md): recorded frames + what the player says they played.
+// These, not the synthetic cases above, are the ground truth for every breath threshold.
+type Expect = { semi: number; glide?: boolean; pulse?: boolean; accent?: boolean; shape?: string; sway?: 'tremolo' | 'shake' };
+const dir = new URL('../../fixtures/', import.meta.url);
+const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')) : [];
+let failed = 0;
+for (const file of files) {
+  const fx = JSON.parse(readFileSync(new URL(file, dir), 'utf8')) as { label: string; refDb: number; frames: Frame[]; expect: Expect[] };
+  const heard: Expect[] = segmentNotes(fx.frames, fx.refDb).map((n) => ({
+    semi: n.semi,
+    ...(n.glide && { glide: true }),
+    ...(n.pulse && { pulse: true }),
+    ...(n.accent && { accent: true }),
+    ...(n.shape && { shape: n.shape }),
+    ...(n.tremolo && { sway: 'tremolo' as const }),
+    ...(n.shake && { sway: 'shake' as const }),
+  }));
+  try {
+    assert.deepEqual(heard, fx.expect);
+    console.log(`  ✓ ${file} — ${fx.label}`);
+  } catch {
+    failed++;
+    console.log(`  ✗ ${file} — ${fx.label}\n      expected ${JSON.stringify(fx.expect)}\n      heard    ${JSON.stringify(heard)}`);
+  }
+}
+if (files.length) console.log(`${files.length - failed}/${files.length} real-playing fixtures agree`);
+else console.log('  (no real-playing fixtures yet — see fixtures/README.md)');
+if (failed) process.exit(1);

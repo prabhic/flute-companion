@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Headphones, Settings2, Waves } from 'lucide-react';
+import { HeardPanel } from '@/components/HeardPanel';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useCompanion } from '@/hooks/useCompanion';
@@ -72,6 +74,15 @@ function Ribbon({ notes, active, tone }: { notes: Note[]; active?: number | null
 
 export function Companion() {
   const c = useCompanion();
+  // Hidden developer view: ?heard in the URL, or press H.
+  const [heard, setHeard] = useState(() => new URLSearchParams(window.location.search).has('heard'));
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'h' && !(e.target instanceof HTMLInputElement)) setHeard((v) => !v);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const running = c.phase !== 'idle';
   const replying = c.phase === 'responding';
   // While tuning, the old Sa is untrusted — don't name swaras against it.
@@ -236,6 +247,7 @@ export function Companion() {
       </footer>
 
       <p className="sr-only" aria-live="polite">{STATUS[c.phase]}</p>
+      {heard && <HeardPanel phrase={c.lastPhrase} onClose={() => setHeard(false)} />}
     </main>
   );
 }

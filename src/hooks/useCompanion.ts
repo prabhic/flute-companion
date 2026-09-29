@@ -47,6 +47,8 @@ export function useCompanion() {
   const [emerged, setEmerged] = useState<Raga | null>(null);
   const [droneOn, setDroneOn] = useState(false);
   const [tuneProgress, setTuneProgress] = useState(0);
+  // The raw material of the last phrase, for the hidden "What I heard" view and fixtures.
+  const [lastPhrase, setLastPhrase] = useState<{ frames: Frame[]; refDb: number; notes: Note[]; saHz: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Everything the rAF loop touches lives in refs — React state inside a rAF closure goes stale.
@@ -226,6 +228,7 @@ export function useCompanion() {
       const phrasePeak = Math.max(...st.frames.map((f) => f.db));
       st.peakDb = Math.max(st.peakDb - 1, phrasePeak); // slowly forgets, so a quieter room re-scales
       const notes = segmentNotes(st.frames, st.peakDb);
+      setLastPhrase({ frames: st.frames, refDb: st.peakDb, notes, saHz: st.settings.saHz });
       if (notes.reduce((a, n) => a + n.dur, 0) < 0.25) return go('listening'); // a breath, not a phrase
       respond(notes);
     }
@@ -371,7 +374,7 @@ export function useCompanion() {
     phase, level, liveSemi, played, reply, replyIdx, whisper, error, settings, droneOn,
     raga: ragaById(settings.ragaId) ?? emerged,
     begin, rest, tuneSa, toggleDrone, chooseRaga,
-    tuneProgress,
+    tuneProgress, lastPhrase,
     // A new key is only a guess at Sa (and its octave) — ask to hear it again.
     setSa: (saHz: number) => {
       setSettings((p) => ({ ...p, saHz, tuned: false }));
