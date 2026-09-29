@@ -2,129 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Musical Flow Design System - Colors inspired by sound waves and musical serenity */
-
+/* Night-raga palette (calm-practice-ux skill): ink night, saffron breath, moonlit reply. */
 @layer base {
   :root {
-    /* Base colors - Deep musical blues */
-    --background: 220 25% 8%;
-    --foreground: 200 15% 95%;
+    --ink: 232 38% 9%;
+    --saffron: 32 92% 62%;
+    --moon: 205 45% 84%;
 
-    /* Card surfaces with subtle depth */
-    --card: 220 20% 12%;
-    --card-foreground: 200 15% 95%;
-
-    --popover: 220 20% 12%;
-    --popover-foreground: 200 15% 95%;
-
-    /* Musical primary - Deep resonant blue */
-    --primary: 210 80% 55%;
-    --primary-foreground: 220 25% 8%;
-    --primary-glow: 210 85% 70%;
-
-    /* Harmonic secondary - Soft teal */
-    --secondary: 180 40% 25%;
-    --secondary-foreground: 180 15% 90%;
-
-    /* Muted tones for subtle elements */
-    --muted: 220 15% 20%;
-    --muted-foreground: 200 10% 70%;
-
-    /* Accent - Flowing cyan for active states */
-    --accent: 190 70% 45%;
-    --accent-foreground: 220 25% 8%;
-    --accent-glow: 190 80% 60%;
-
-    /* Audio visualization colors */
-    --wave-active: 210 80% 55%;
-    --wave-response: 280 60% 65%;
-    --wave-background: 220 20% 15%;
-
-    /* Flow state indicators */
-    --flow-calm: 180 40% 45%;
-    --flow-active: 210 70% 50%;
-    --flow-responsive: 280 60% 55%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 200 15% 95%;
-
-    --border: 220 15% 25%;
-    --input: 220 15% 20%;
-    --ring: 210 80% 55%;
-
+    --background: 232 38% 9%;
+    --foreground: 36 30% 92%;
+    --card: 232 30% 13%;
+    --card-foreground: 36 30% 92%;
+    --popover: 232 30% 13%;
+    --popover-foreground: 36 30% 92%;
+    --primary: 32 92% 62%;
+    --primary-foreground: 232 38% 9%;
+    --secondary: 232 20% 20%;
+    --secondary-foreground: 36 30% 92%;
+    --muted: 232 20% 18%;
+    --muted-foreground: 225 15% 72%;
+    --accent: 232 20% 22%;
+    --accent-foreground: 36 30% 92%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 36 30% 96%;
+    --border: 232 18% 24%;
+    --input: 232 22% 16%;
+    --ring: 32 92% 62%;
     --radius: 1rem;
-
-    /* Musical gradients */
-    --gradient-flow: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
-    --gradient-wave: linear-gradient(90deg, hsl(var(--wave-active)), hsl(var(--wave-response)));
-    --gradient-background: linear-gradient(180deg, hsl(var(--background)), hsl(220 20% 10%));
-    
-    /* Animations and transitions */
-    --transition-flow: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-quick: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    
-    /* Audio-reactive shadows */
-    --shadow-audio: 0 0 30px hsl(var(--primary) / 0.3);
-    --shadow-flow: 0 10px 40px -10px hsl(var(--accent) / 0.4);
-    --shadow-response: 0 0 50px hsl(var(--wave-response) / 0.4);
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
-  .dark {
-    /* Dark mode keeps the same musical theme but with inverted contrast */
-    --background: 220 25% 8%;
-    --foreground: 200 15% 95%;
-
-    --card: 220 20% 12%;
-    --card-foreground: 200 15% 95%;
-
-    --popover: 220 20% 12%;
-    --popover-foreground: 200 15% 95%;
-
-    --primary: 210 80% 55%;
-    --primary-foreground: 220 25% 8%;
-    --primary-glow: 210 85% 70%;
-
-    --secondary: 180 40% 25%;
-    --secondary-foreground: 180 15% 90%;
-
-    --muted: 220 15% 20%;
-    --muted-foreground: 200 10% 70%;
-
-    --accent: 190 70% 45%;
-    --accent-foreground: 220 25% 8%;
-    --accent-glow: 190 80% 60%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 200 15% 95%;
-
-    --border: 220 15% 25%;
-    --input: 220 15% 20%;
-    --ring: 210 80% 55%;
-
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
 
@@ -134,72 +38,48 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    background: var(--gradient-background);
-    overflow-x: hidden;
+    @apply bg-background text-foreground antialiased;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 45%, hsl(245 40% 16%) 0%, transparent 70%),
+      radial-gradient(ellipse 60% 40% at 80% 0%, hsl(205 45% 84% / 0.06) 0%, transparent 60%),
+      hsl(var(--background));
+    background-attachment: fixed;
   }
 }
 
-@layer utilities {
-  /* Audio visualization utilities */
-  .audio-wave {
-    background: var(--gradient-wave);
-    transition: var(--transition-quick);
-    animation: pulse-audio 2s ease-in-out infinite;
+@layer components {
+  .orb {
+    transition: transform 120ms linear, background 600ms ease, box-shadow 600ms ease;
+    will-change: transform;
+  }
+  .orb-idle {
+    background: radial-gradient(circle at 35% 30%, hsl(36 30% 80%), hsl(232 20% 30%) 70%);
+    box-shadow: 0 0 60px hsl(36 30% 80% / 0.12);
+  }
+  .orb-saffron {
+    background: radial-gradient(circle at 35% 30%, hsl(42 100% 82%), hsl(var(--saffron)) 45%, hsl(18 80% 42%) 100%);
+    box-shadow: 0 0 90px hsl(var(--saffron) / 0.45), 0 0 200px hsl(var(--saffron) / 0.15);
+  }
+  .orb-moon {
+    background: radial-gradient(circle at 35% 30%, hsl(0 0% 100%), hsl(var(--moon)) 45%, hsl(220 35% 55%) 100%);
+    box-shadow: 0 0 90px hsl(var(--moon) / 0.45), 0 0 200px hsl(var(--moon) / 0.15);
+  }
+  .orb-breathe::after {
+    content: '';
+    position: absolute;
+    inset: -14px;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--foreground) / 0.15);
+    animation: breathe 5.5s ease-in-out infinite;
   }
 
-  .flow-shadow {
-    box-shadow: var(--shadow-flow);
+  @keyframes breathe {
+    0%, 100% { transform: scale(0.96); opacity: 0.25; }
+    50% { transform: scale(1.08); opacity: 0.7; }
   }
 
-  .audio-shadow {
-    box-shadow: var(--shadow-audio);
-  }
-
-  .response-shadow {
-    box-shadow: var(--shadow-response);
-  }
-
-  .gradient-flow {
-    background: var(--gradient-flow);
-  }
-
-  .transition-flow {
-    transition: var(--transition-flow);
-  }
-
-  .transition-quick {
-    transition: var(--transition-quick);
-  }
-
-  /* Audio-reactive animations */
-  @keyframes pulse-audio {
-    0%, 100% { opacity: 0.6; transform: scaleY(0.8); }
-    50% { opacity: 1; transform: scaleY(1.2); }
-  }
-
-  @keyframes flow-wave {
-    0% { transform: translateX(-100%) scaleY(1); }
-    50% { transform: translateX(0%) scaleY(1.5); }
-    100% { transform: translateX(100%) scaleY(1); }
-  }
-
-  @keyframes gentle-pulse {
-    0%, 100% { opacity: 0.8; }
-    50% { opacity: 1; }
-  }
-
-  .animate-flow-wave {
-    animation: flow-wave 3s ease-in-out infinite;
-  }
-
-  .animate-gentle-pulse {
-    animation: gentle-pulse 4s ease-in-out infinite;
-  }
-
-  /* Blur effects for depth */
-  .backdrop-glass {
-    backdrop-filter: blur(12px) saturate(150%);
-    background: hsl(var(--card) / 0.7);
+  @media (prefers-reduced-motion: reduce) {
+    .orb-breathe::after { animation: none; }
+    .orb { transition: background 600ms ease; }
   }
 }

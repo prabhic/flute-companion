@@ -15,10 +15,6 @@ const buttonVariants = cva(
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        // Musical variants
-        flow: "gradient-flow text-primary-foreground hover:opacity-90 audio-shadow transition-flow",
-        pulse: "bg-wave-active/20 border border-wave-active text-wave-active hover:bg-wave-active hover:text-primary-foreground transition-quick",
-        response: "bg-wave-response/20 border border-wave-response text-wave-response hover:bg-wave-response hover:text-primary-foreground response-shadow transition-flow",
       },
       size: {
         default: "h-10 px-4 py-2",

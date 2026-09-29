@@ -41,18 +41,10 @@ export default {
           foreground: "hsl(var(--accent-foreground))",
           glow: "hsl(var(--accent-glow))",
         },
-        // Audio visualization colors
-        wave: {
-          active: "hsl(var(--wave-active))",
-          response: "hsl(var(--wave-response))",
-          background: "hsl(var(--wave-background))",
-        },
-        // Flow state colors
-        flow: {
-          calm: "hsl(var(--flow-calm))",
-          active: "hsl(var(--flow-active))",
-          responsive: "hsl(var(--flow-responsive))",
-        },
+        // Night-raga palette: saffron = the player, moon = the companion, ink = the night.
+        saffron: "hsl(var(--saffron))",
+        moon: "hsl(var(--moon))",
+        ink: "hsl(var(--ink))",
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
@@ -71,6 +63,10 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+      },
+      fontFamily: {
+        display: ['"Cormorant Garamond"', "Georgia", "serif"],
+        deva: ['"Tiro Devanagari Hindi"', '"Noto Serif Devanagari"', "serif"],
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -94,8 +90,13 @@ export default {
             height: "0",
           },
         },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "none" },
+        },
       },
       animation: {
+        "fade-in": "fade-in 0.8s ease-out both",
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
