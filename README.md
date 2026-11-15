@@ -1,7 +1,6 @@
-# Echo Flute Flow
+# Flute Companion
 
-A bansuri friend: play a short phrase, pause, listen to its answer, and play again.
-Learning happens by ear, through a musical conversation, without scores or sheet music.
+**Vision:** can we build a flute companion app that helps you learn the flute while you play along?
 
 ## Play
 
