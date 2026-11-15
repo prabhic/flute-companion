@@ -4,6 +4,7 @@ import type { Raga } from './ragas.ts';
 export interface Note {
   semi: number; // semitones from madhya Sa
   dur: number; // seconds
+  restAfter?: number; // breath gap before the next note
   glide?: boolean; // meend into this note
   kan?: number; // grace note (semi) touched before this note
   // Breath expression — how the note was blown (breath-expression-analysis skill).
@@ -24,6 +25,7 @@ export type Move = 'echo' | 'extend' | 'answer' | 'ornament' | 'pakad' | 'breath
 export interface Offer {
   notes: Note[];
   tries: number; // how many times it has been replayed after a miss
+  lessonId?: string;
 }
 
 export interface Response {
@@ -41,6 +43,7 @@ export interface DialogueContext {
   exchange: number; // how far the dialogue has come (persists across sessions)
   offer?: Offer | null; // the companion's last offered phrase, awaiting imitation
   unheard?: Technique[]; // techniques not yet heard from this player
+  preference?: 'echo' | 'vary';
 }
 
 const CAUGHT = 0.8; // share of the offered phrase the player must echo to have "caught" it
@@ -137,6 +140,19 @@ function breathWhisper(notes: Note[]): string | null {
 }
 
 export function composeResponse(played: Note[], ctx: DialogueContext, rng: () => number = Math.random): Response {
+  // A requested mirror is literal: no new notes, truncation, or held final note.
+  if (ctx.preference && played.length) {
+    const notes = played.map((n) => ({ ...n }));
+    if (ctx.preference === 'vary') {
+      const steps = ladder(ctx.raga?.notes ?? [...new Set([0, 7, ...played.map((n) => pc(n.semi))])]);
+      const i = notes.length > 2 ? notes.length - 2 : notes.length - 1;
+      const from = steps.indexOf(nearest(steps, notes[i].semi));
+      const semi = steps[from + 1] ?? steps[from - 1];
+      notes[i] = { ...notes[i], semi, bend: undefined, kan: undefined };
+      return { notes, move: 'echo', offer: null, whisper: `Your phrase, with a little turn to ${swara(semi).roman}. Echo it back if you like.` };
+    }
+    return { notes, move: 'echo', offer: null, whisper: 'Your phrase, just as you played it. Let’s trade it again.' };
+  }
   // The guru offered a phrase last time: was it caught?
   if (ctx.offer && played.length) {
     const offer = ctx.offer;

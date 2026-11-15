@@ -34,6 +34,8 @@ the player across sessions (localStorage, never scores). No Western notation.
 - `flute-sound-synthesis` — breathy voice, meend/kan playback, tanpura, reverb
 - `musical-companion-dialogue` — response moves, raga emergence, whispers
 - `calm-practice-ux` — orb-centred, metric-free UI and copy
+- `rhythm-companion` — beat mode: stroke onsets (tabla, table, anything), grid/cycle inference,
+  tabla replies (echo/fill/roll/answer/tihai) that land on the player's own sam
 
 ### Flow
 ```
@@ -50,10 +52,12 @@ mic → capture worklet (audio thread, 2048/1024 hop, audio-clock time)
 src/music/swara.ts      sargam labels, just ratios, bansuri keys (pure)
 src/music/ragas.ts      7 beginner ragas, matchRaga, histogram (pure)
 src/music/companion.ts  composeResponse: echo/extend/answer/ornament/pakad (pure, seeded rng)
+src/music/rhythm.ts     beat mode: toBeat (grid + cycle), respondBeat, nextSam (pure)
 src/music/check.ts      runnable self-check for all pure code → `npm run check`
 src/audio/pitch.ts      yin(), rms() (pure)
 src/audio/phrase.ts     segmentNotes(): notes + meend + breath expression (pure)
-src/audio/voice.ts      Web Audio: output bus + reverb, playPhrase(), playOwnVoice(), startDrone()
+src/audio/onset.ts      detectOnsets(): stroke onsets + low/high class (pure)
+src/audio/voice.ts      Web Audio: output bus + reverb, playPhrase(), playOwnVoice(), playBeat(), startDrone()
 public/capture.worklet.js  audio-thread capture (served as a file: worklets can't load data: URLs)
 src/components/HeardPanel.tsx  hidden "What I heard" view (?heard or H) + fixture export
 fixtures/               real-playing fixtures; npm run check fails if analysis disagrees
@@ -62,7 +66,7 @@ src/components/Companion.tsx  the whole UI
 ```
 
 ### Rules
-- Pure modules in `src/music` and `src/audio/{pitch,phrase}.ts` use relative `.ts` imports
+- Pure modules in `src/music` and `src/audio/{pitch,phrase,onset}.ts` use relative `.ts` imports
   so `npm run check` runs them in Node without a bundler. Keep them free of DOM/Web Audio.
 - Analysis runs in `onWindow` (called by the worklet), never a rAF loop. Its state lives in
   the `s` ref in `useCompanion`, never React state.
@@ -79,9 +83,28 @@ src/components/Companion.tsx  the whole UI
 - TS is relaxed (`strict: false`); path alias `@/*` → `src/*`.
 
 ## Not done yet (from the review)
-- **Tala**: no rhythm anywhere. Needs its own skill (theka, tempo following, sam) before code.
+- **Tala**: beat mode is call-and-response only (Drum button). No theka under the flute, no
+  playing *along* while you play (needs echo cancellation), low/high split untested on real strokes.
 - **Authentic dhuns**: lead phrases come from pakad fragments and scale walks; real tunes
   need a bansuri teacher's input, not invention.
 - **Pitch correction without time change** (PSOLA / phase vocoder) for own-voice echoes.
 - **Hearing while the companion plays** (turn-taking is strict; needs echo cancellation).
 - Never tested on a real bansuri, iOS/Safari, or listened to by a musician.
+
+## Remembered practice path
+
+`src/music/practice.ts` now owns **Learn together** (the default): two free echoes, a short
+Sa-relative offer, two recognized imitations on separate offers before advancing. Missed
+phrases replay more slowly, then give way to free play without advancing. Per-raga progress
+is validated and persisted in journey memory. Discover together moves through existing
+ragas; an explicitly chosen raga stays selected. These are note-familiarity exercises, not
+claims of complete raga grammar or mastery.
+
+**Echo me** preserves the entire phrase; **Vary a little** changes one note. Both override
+random dialogue moves. **You lead**, replay, and slower synthesized replay do not count as
+learning attempts. `restAfter` preserves breath gaps in synthesized replies; synthesis
+returns actual note start times to synchronize the ribbon.
+
+Run `npm run typecheck`, `npm run check`, `npm run lint`, and `npm run build`. With the dev
+server running, `npm run check:browser` checks a synthetic microphone through the real
+AudioWorklet (requires Playwright Chromium or CHROME_PATH). No real flute has been validated.

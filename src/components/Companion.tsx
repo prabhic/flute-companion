@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Headphones, Settings2, Waves } from 'lucide-react';
+import { Drum, Headphones, Settings2, Waves } from 'lucide-react';
 import { HeardPanel } from '@/components/HeardPanel';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -8,6 +8,7 @@ import { useCompanion } from '@/hooks/useCompanion';
 import { RAGAS } from '@/music/ragas';
 import { BANSURI_KEYS, swara } from '@/music/swara';
 import type { Note } from '@/music/companion';
+import { bol, type Slot } from '@/music/rhythm';
 import { cn } from '@/lib/utils';
 
 // Octave-agnostic: a tuned Sa in any register still names its bansuri key.
@@ -20,6 +21,7 @@ const nearestKey = (saHz: number) =>
 
 const STATUS: Record<string, string> = {
   idle: 'Resting',
+  starting: 'Opening our ears…',
   listening: 'Your turn',
   playing: "I'm listening",
   responding: 'Listen…',
@@ -73,6 +75,25 @@ function Ribbon({ notes, active, tone }: { notes: Note[]; active?: number | null
   );
 }
 
+// Beat mode: strokes named as tabla bols; size = accent, a dot = an empty step.
+function BeatRibbon({ slots, active, tone }: { slots: Slot[]; active?: number | null; tone: 'you' | 'me' }) {
+  if (!slots.length) return null;
+  return (
+    <div className={cn('flex flex-wrap items-end justify-center gap-x-2 gap-y-1 font-display text-lg sm:text-xl min-h-[3rem]', tone === 'you' ? 'text-saffron' : 'text-moon')}>
+      {slots.map((s, i) => (
+        <span
+          key={i}
+          className={cn('transition-all duration-150', active === i && 'scale-125 drop-shadow-[0_0_8px_hsl(var(--moon))]')}
+          style={{ fontWeight: s?.accent ? 600 : 400, opacity: !s ? 0.3 : active === i ? 1 : s.soft ? 0.5 : 0.8 }}
+        >
+          {bol(s)}
+          {s?.roll && <sup className="text-xs opacity-70">ra</sup>}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function Companion() {
   const c = useCompanion();
   // Hidden developer view: ?heard in the URL, or press H.
@@ -86,13 +107,15 @@ export function Companion() {
   }, []);
   const running = c.phase !== 'idle';
   const replying = c.phase === 'responding';
+  const canConfigure = c.phase === 'idle' || c.phase === 'listening';
   // While tuning, the old Sa is untrusted — don't name swaras against it.
-  const semi = c.phase === 'tuning' ? null : replying ? (c.replyIdx !== null ? c.reply[c.replyIdx]?.semi : null) : c.liveSemi;
+  const beatMode = c.settings.mode === 'beat';
+  const semi = c.phase === 'tuning' || beatMode ? null : replying ? (c.replyIdx !== null ? c.reply[c.replyIdx]?.semi : null) : c.liveSemi;
   const label = semi === null || semi === undefined ? null : swara(semi);
   const key = nearestKey(c.settings.saHz);
 
   return (
-    <main className="min-h-[100dvh] flex flex-col items-center justify-between px-4 py-6 sm:py-10 overflow-hidden">
+    <main className="min-h-[100dvh] flex flex-col items-center justify-between gap-10 px-4 py-6 sm:py-10 overflow-hidden">
       <header className="w-full max-w-3xl flex items-start justify-between gap-4">
         <h1 className="font-display text-xl sm:text-2xl text-foreground/90 tracking-wide whitespace-nowrap">Echo Flute Flow</h1>
         {c.raga && (
@@ -104,7 +127,22 @@ export function Companion() {
         )}
       </header>
 
-      <section className="flex flex-col items-center gap-8 w-full max-w-2xl">
+      <section className="flex flex-col items-center gap-6 w-full max-w-2xl">
+        {!beatMode && (
+          <div className="text-center space-y-3 mb-4">
+            <p className="text-sm text-muted-foreground">Your flute friend · play, pause, listen, repeat</p>
+            <div role="group" aria-label="How we play" className="flex flex-wrap justify-center gap-2">
+              {([{ id: 'echo', label: 'Echo me' }, { id: 'vary', label: 'Vary a little' }, { id: 'learn', label: 'Learn together' }] as const).map((style) => (
+                <Button key={style.id} size="sm" variant="ghost" disabled={!canConfigure}
+                  aria-pressed={c.settings.style === style.id} onClick={() => c.setStyle(style.id)}
+                  className={cn('rounded-full', c.settings.style === style.id && 'bg-moon/10 text-moon')}>
+                  {style.label}
+                </Button>
+              ))}
+            </div>
+            {c.settings.style === 'learn' && <p className="text-sm text-moon">{c.focus}</p>}
+          </div>
+        )}
         {/* The orb: saffron breath when you play, moonlight when I answer. */}
         <div
           className={cn(
@@ -123,7 +161,9 @@ export function Companion() {
             </svg>
           )}
           <div className="text-center select-none">
-            {label ? (
+            {beatMode && replying && c.replyIdx !== null ? (
+              <div className="font-display text-6xl sm:text-7xl leading-none text-ink">{bol(c.beat.reply[c.replyIdx])}</div>
+            ) : label ? (
               <>
                 <div className="font-deva text-7xl sm:text-8xl leading-none text-ink">{label.deva}</div>
                 <div className="mt-2 text-sm text-ink/70">
@@ -138,13 +178,30 @@ export function Companion() {
         </div>
 
         <div className="space-y-3 min-h-[5rem]">
-          <Ribbon notes={c.played} tone="you" />
-          <Ribbon notes={c.reply} active={replying ? c.replyIdx : null} tone="me" />
+          {beatMode ? (
+            <>
+              <BeatRibbon slots={c.beat.heard} tone="you" />
+              <BeatRibbon slots={c.beat.reply} active={replying ? c.replyIdx : null} tone="me" />
+            </>
+          ) : (
+            <>
+              <Ribbon notes={c.played} tone="you" />
+              <Ribbon notes={c.reply} active={replying ? c.replyIdx : null} tone="me" />
+            </>
+          )}
         </div>
 
         <p aria-live="polite" key={c.whisper} className="font-display text-lg sm:text-xl text-foreground/80 text-center min-h-[3.5rem] animate-fade-in px-2">
-          {c.error ?? c.whisper}
+          {c.error ?? (c.whisper || (beatMode ? 'Tap a little pattern, then leave room for my answer.' : 'Bring your flute. We’ll find your Sa, then take turns playing.'))}
         </p>
+        {!beatMode && running && c.phase !== 'starting' && (
+          <div className="flex flex-wrap justify-center gap-2" aria-label="Listen and repeat">
+            {c.settings.style === 'learn' && <Button variant="outline" size="sm" className="rounded-full" disabled={c.phase !== 'listening'} onClick={c.lead}>You lead</Button>}
+            <Button variant="ghost" size="sm" disabled={!c.canReplay || c.phase !== 'listening'} onClick={() => c.replay()}>Play it again</Button>
+            <Button variant="ghost" size="sm" disabled={!c.canReplay || c.phase !== 'listening'} onClick={() => c.replay(true)}>Again, slower</Button>
+          </div>
+        )}
+        {!running && <p className="text-xs text-muted-foreground text-center">We take turns: I listen while you play, then you listen to my reply.</p>}
       </section>
 
       <footer className="flex items-center gap-3">
@@ -156,19 +213,33 @@ export function Companion() {
             running ? 'bg-muted text-foreground hover:bg-muted/80' : 'bg-saffron text-ink hover:bg-saffron/90',
           )}
         >
-          {running ? 'Rest' : 'Begin'}
+          {c.phase === 'starting' ? 'Cancel' : running ? 'Rest' : 'Begin'}
         </Button>
 
         <Button
           size="icon"
           variant="ghost"
           onClick={c.toggleDrone}
+          disabled={c.phase === 'starting' || c.phase === 'tuning'}
           aria-pressed={c.droneOn}
           aria-label={c.droneOn ? 'Stop tanpura drone' : 'Play tanpura drone'}
           title="Tanpura drone (headphones recommended)"
           className={cn('rounded-full h-12 w-12', c.droneOn && 'text-moon bg-moon/10')}
         >
           <Waves className="w-5 h-5" />
+        </Button>
+
+        <Button
+          size="icon"
+          variant="ghost"
+          disabled={c.phase === 'starting'}
+          onClick={() => c.setMode(beatMode ? 'flute' : 'beat')}
+          aria-pressed={beatMode}
+          aria-label={beatMode ? 'Back to flute' : 'Play beats with me'}
+          title="Beats — on a tabla, a table, anything"
+          className={cn('rounded-full h-12 w-12', beatMode && 'text-moon bg-moon/10')}
+        >
+          <Drum className="w-5 h-5" />
         </Button>
 
         <Sheet>
@@ -188,6 +259,7 @@ export function Companion() {
                 <label className="text-sm text-muted-foreground" htmlFor="key">Bansuri key</label>
                 <select
                   id="key"
+                  disabled={!canConfigure}
                   value={key.key}
                   onChange={(e) => c.setSa(BANSURI_KEYS.find((k) => k.key === e.target.value)!.saHz)}
                   className="w-full rounded-lg bg-input border border-border px-3 py-2"
@@ -200,7 +272,7 @@ export function Companion() {
                   variant="outline"
                   className="w-full"
                   onClick={c.tuneSa}
-                  disabled={c.phase !== 'listening'}
+                  disabled={c.phase !== 'listening' || beatMode}
                 >
                   Tune my Sa
                 </Button>
@@ -227,7 +299,7 @@ export function Companion() {
 
               <fieldset className="space-y-2">
                 <legend className="text-sm text-muted-foreground mb-2">Wander in…</legend>
-                {[{ id: 'follow', name: 'Follow me', time: 'let the raga find us', feel: '' }, ...RAGAS].map((r) => (
+                {[{ id: 'follow', name: c.settings.style === 'learn' ? 'Discover together' : 'Follow me', time: c.settings.style === 'learn' ? 'new notes, then new ragas' : 'let the raga find us', feel: '' }, ...RAGAS].map((r) => (
                   <label
                     key={r.id}
                     className={cn(
@@ -238,6 +310,7 @@ export function Companion() {
                     <input
                       type="radio"
                       name="raga"
+                      disabled={!canConfigure}
                       className="accent-[hsl(var(--moon))]"
                       checked={c.settings.ragaId === r.id}
                       onChange={() => c.chooseRaga(r.id)}
@@ -251,9 +324,9 @@ export function Companion() {
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
                   I remember, on this device only, how far our dialogue has come, our last raga, and which breath
-                  techniques I've heard from you — so I can pick up where we left off. Never a score.
+                  techniques and little phrases we’ve explored — so I can pick up where we left off. Your recordings stay in memory only while we play.
                 </p>
-                <Button variant="ghost" size="sm" className="px-0 text-muted-foreground hover:text-foreground" onClick={c.forget}>
+                <Button variant="ghost" size="sm" className="px-0 text-muted-foreground hover:text-foreground" disabled={!canConfigure} onClick={c.forget}>
                   Forget our history
                 </Button>
               </div>

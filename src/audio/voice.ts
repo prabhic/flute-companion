@@ -1,4 +1,5 @@
 import type { Note } from '@/music/companion';
+import type { Slot } from '@/music/rhythm';
 import { semiToHz } from '@/music/swara';
 
 /** Master bus: dry + generated reverb. Everything the companion sounds goes through `input`. */
@@ -44,7 +45,7 @@ const jitter = (amt: number) => (Math.random() * 2 - 1) * amt;
  * Returns when the phrase (incl. release) ends, in ctx time, and a stop() that fades it out now.
  */
 export function playPhrase(ctx: AudioContext, out: AudioNode, notes: Note[], saHz: number, at = ctx.currentTime + 0.12) {
-  if (!notes.length) return { end: at, stop: () => {} };
+  if (!notes.length) return { end: at, starts: [] as number[], stop: () => {} };
   // env (articulation, strength, swell/fade) → trem (breath tremolo) → out
   const env = ctx.createGain();
   env.gain.value = 0;
@@ -95,6 +96,7 @@ export function playPhrase(ctx: AudioContext, out: AudioNode, notes: Note[], saH
   };
 
   let t = at;
+  const starts: number[] = [];
   const first = semiToHz(notes[0].semi, saHz);
   oscs.forEach(({ o, h }) => o.frequency.setValueAtTime(first * h * 0.991, t)); // slight scoop
   env.gain.setValueAtTime(0, t);
@@ -102,6 +104,7 @@ export function playPhrase(ctx: AudioContext, out: AudioNode, notes: Note[], saH
   notes.forEach((n, i) => {
     const f = semiToHz(n.semi, saHz);
     const start = t + (i ? jitter(0.012) : 0);
+    starts.push(start);
     const isLast = i === notes.length - 1;
     // The player's breath, played back (flute-sound-synthesis skill). Jitter only when unknown.
     const dyn = n.dyn ?? 0.55 + jitter(0.06);
@@ -145,6 +148,10 @@ export function playPhrase(ctx: AudioContext, out: AudioNode, notes: Note[], saH
     tdepth.gain.setTargetAtTime(depth, start + 0.08, 0.05);
 
     t = start + n.dur;
+    if (!isLast && n.restAfter) {
+      env.gain.setTargetAtTime(0, t, 0.015);
+      t += n.restAfter;
+    }
     if (isLast) env.gain.setTargetAtTime(0, t - 0.1, n.shape === 'fade' ? 0.2 : 0.12);
   });
 
@@ -154,7 +161,7 @@ export function playPhrase(ctx: AudioContext, out: AudioNode, notes: Note[], saH
     node.stop(end);
   });
   oscs[0].o.onended = () => trem.disconnect();
-  return { end, stop: () => fadeOut(ctx, trem) };
+  return { end, starts, stop: () => fadeOut(ctx, trem) };
 }
 
 /** Fade a node out over ~50ms, then disconnect it — used when the player chooses Rest mid-reply. */
@@ -162,6 +169,64 @@ export function fadeOut(ctx: AudioContext, node: GainNode) {
   node.gain.cancelScheduledValues(ctx.currentTime);
   node.gain.setTargetAtTime(0, ctx.currentTime, 0.015);
   window.setTimeout(() => node.disconnect(), 150);
+}
+
+/**
+ * A synthesized tabla (rhythm-companion skill): bayan = a sine whose pitch sinks, dayan = ringing
+ * partials tuned to Sa, both with a short skin slap. Returns each slot's start for the UI.
+ */
+export function playBeat(ctx: AudioContext, out: AudioNode, slots: Slot[], step: number, saHz: number, at = ctx.currentTime + 0.12) {
+  const bus = ctx.createGain();
+  bus.connect(out);
+  let dayan = saHz;
+  while (dayan < 280) dayan *= 2;
+  while (dayan >= 560) dayan /= 2;
+
+  const ring = (t: number, f: number, gain: number, decay: number, sink = 1) => {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.frequency.setValueAtTime(f, t);
+    if (sink !== 1) o.frequency.exponentialRampToValueAtTime(f * sink, t + 0.2);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    o.connect(g).connect(bus);
+    o.start(t);
+    o.stop(t + decay + 0.02);
+  };
+  const slap = (t: number, hz: number, gain: number) => {
+    const n = noise(ctx);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = hz;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+    n.connect(f).connect(g).connect(bus);
+    n.start(t);
+    n.stop(t + 0.04);
+  };
+  const stroke = (t: number, s: NonNullable<Slot>, soft = s.soft) => {
+    const v = (s.accent ? 1 : 0.65) * (soft ? 0.35 : 1) * (1 + jitter(0.08));
+    if (s.low) {
+      ring(t, 150, 0.6 * v, 0.45, 0.55);
+      slap(t, 400, 0.15 * v);
+    }
+    if (s.high) {
+      const decay = soft ? 0.07 : 0.3;
+      [1, 2, 3].forEach((h, i) => ring(t, dayan * h, [0.25, 0.12, 0.06][i] * v, decay / (1 + i * 0.5)));
+      slap(t, 3000, 0.12 * v);
+    }
+  };
+
+  const starts = slots.map((_, i) => at + i * step);
+  slots.forEach((s, i) => {
+    if (!s) return;
+    const t = starts[i] + (i ? jitter(0.006) : 0);
+    stroke(t, s);
+    if (s.roll) stroke(t + step / 2, { low: false, high: true }, true);
+  });
+  return { end: at + slots.length * step + 0.3, starts, stop: () => fadeOut(ctx, bus) };
 }
 
 /** Tanpura drone: Pa · Sa · Sa · kharaj Sa, looped with a look-ahead scheduler. Returns stop(). */
@@ -249,12 +314,13 @@ export function playOwnVoice(ctx: AudioContext, out: AudioNode, rec: Recording, 
     const last = i === segs.length - 1;
     g.gain.setValueAtTime(first ? 1 : 0, t);
     if (!first) g.gain.linearRampToValueAtTime(1, t + XFADE);
-    g.gain.setValueAtTime(1, t + outLen - (last ? 0.15 : 0));
+    g.gain.setValueAtTime(1, t + outLen - (last ? Math.min(0.15, outLen / 2) : 0));
     g.gain.linearRampToValueAtTime(0, t + outLen + (last ? 0 : XFADE));
     src.connect(g).connect(bus);
     src.start(t, offset, len + (last ? 0 : XFADE * rate));
     starts.push(t);
     t += outLen;
+    if (last) src.onended = () => bus.disconnect();
   });
   return { end: t, starts, stop: () => fadeOut(ctx, bus) };
 }

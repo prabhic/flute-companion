@@ -103,3 +103,22 @@ Record what it has been checked against, so no one mistakes a guess for a fact.
 | "Caught" = 80% LCS | Unit tests only | Unvalidated with a learner |
 | Whispers never grade | Tested (no digits, "wrong", "score") | Enforced |
 | Tala | — | **Missing.** Needs its own skill: theka, tempo tracking, sam |
+
+## Explicit practice styles (November 2026)
+
+The app defaults to `practiceTurn` in `src/music/practice.ts`. It interleaves literal echoes
+with a remembered sequence of small note-familiarity exercises, then existing pakad
+fragments. Each exercise needs two recognized imitations on separate offers before the next
+one. Matching requires the same pitch-class sequence and broadly matching relative note
+lengths; whole-phrase tempo changes and octave slips are welcome. After two slower retries,
+it returns to free play without advancing. It never presents these internal counts as scores.
+
+Echo me and Vary a little bypass random moves. Echo is literal (no truncation or longer last
+note); Vary changes one note and retains breath and rhythm. The earlier random-move guidance
+still applies to free dialogue after the selected raga's exercises are complete.
+
+| Claim | Checked against | Status |
+|---|---|---|
+| Progress requires revisiting; at most one new pitch class per exercise | Pure checks across every existing raga | Passes; pedagogy needs learner/teacher review |
+| Saved practice, echo and slower replay work end to end | Chromium, synthetic mic through the real capture worklet | Passes; not real bansuri evidence |
+| Rhythm matching tolerances | Synthetic phrases | Provisional; validate with real learner fixtures |
